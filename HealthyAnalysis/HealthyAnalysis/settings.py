@@ -31,7 +31,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
-CSRF_TRUSTED_ORIGINS = ['https://*.serveo.net']
+CSRF_TRUSTED_ORIGINS = ['https://*.serveousercontent.com']
 
 
 # Application definition
