@@ -9,7 +9,9 @@ import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(val route: String) {
-    data object Auth : Screen("auth")
+    data object Login : Screen("login")
+    data object Register : Screen("register")
+    data object Verify : Screen("verify")
     data object Home : Screen("home")
     data object Food : Screen("food")
     data object Analysis : Screen("analysis")

@@ -38,11 +38,17 @@ class AuthInterceptor @Inject constructor(
         val response = chain.proceed(request)
 
         if (response.code == 401) {
+            val refreshToken = runBlocking { tokenManager.getRefreshTokenSync() }
+            if (refreshToken == null) {
+                return response
+            }
             response.close()
-            val refreshToken = runBlocking { tokenManager.getRefreshTokenSync() } ?: return response
 
+            val refreshUrl = originalRequest.url.newBuilder()
+                .encodedPath("/api/auth/token/refresh/")
+                .build()
             val refreshRequest = originalRequest.newBuilder()
-                .url("${originalRequest.url.scheme}://${originalRequest.url.host}:${originalRequest.url.port}/api/auth/token/refresh/")
+                .url(refreshUrl)
                 .post(
                     """{"refresh":"$refreshToken"}"""
                         .toRequestBody("application/json".toMediaType())

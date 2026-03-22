@@ -3,11 +3,9 @@ package com.healthanalysis.app.presentation.screens.food
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthanalysis.app.data.models.FoodLogResponse
-import com.healthanalysis.app.data.repository.NutritionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class FoodUiState(
@@ -34,9 +32,7 @@ data class FoodUiState(
 )
 
 @HiltViewModel
-class FoodViewModel @Inject constructor(
-    private val nutritionRepository: NutritionRepository
-) : ViewModel() {
+class FoodViewModel @Inject constructor() : ViewModel() {
 
     private val _uiState = MutableStateFlow(FoodUiState())
     val uiState: StateFlow<FoodUiState> = _uiState
@@ -46,58 +42,8 @@ class FoodViewModel @Inject constructor(
     }
 
     fun loadData() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            try {
-                val result = nutritionRepository.getFoodLogs()
-                result.onSuccess { logs ->
-                    val today = java.time.LocalDate.now().toString()
-                    val todayLogs = logs.filter { it.createdAt.startsWith(today) }
-
-                    val breakfast = todayLogs.filter { it.mealType == "breakfast" }
-                    val lunch = todayLogs.filter { it.mealType == "lunch" }
-                    val dinner = todayLogs.filter { it.mealType == "dinner" }
-                    val snack = todayLogs.filter { it.mealType == "snack" }
-
-                    fun calcCalories(list: List<FoodLogResponse>) =
-                        list.sumOf { ((it.product.calories * it.weight) / 100.0).toInt() }
-                    fun calcNutrient(list: List<FoodLogResponse>, getter: (FoodLogResponse) -> Double) =
-                        list.sumOf { ((getter(it) * it.weight) / 100.0).toInt() }
-
-                    val totalCal = calcCalories(todayLogs)
-                    val totalP = calcNutrient(todayLogs) { it.product.proteins }
-                    val totalF = calcNutrient(todayLogs) { it.product.fats }
-                    val totalC = calcNutrient(todayLogs) { it.product.carbs }
-
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        caloriesConsumed = totalCal,
-                        caloriesRemaining = (2000 - totalCal).coerceAtLeast(0),
-                        proteins = totalP,
-                        fats = totalF,
-                        carbs = totalC,
-                        breakfastLogs = breakfast,
-                        lunchLogs = lunch,
-                        dinnerLogs = dinner,
-                        snackLogs = snack,
-                        breakfastCalories = calcCalories(breakfast),
-                        lunchCalories = calcCalories(lunch),
-                        dinnerCalories = calcCalories(dinner),
-                        snackCalories = calcCalories(snack)
-                    )
-                }.onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = e.message ?: "Unknown error"
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message ?: "Unknown error"
-                )
-            }
-        }
+        // GET nutrition/log/ does not exist on the backend — show empty state
+        _uiState.value = _uiState.value.copy(isLoading = false)
     }
 
     fun onSearchQueryChanged(query: String) {
