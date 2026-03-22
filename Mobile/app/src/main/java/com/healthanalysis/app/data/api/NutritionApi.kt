@@ -1,0 +1,22 @@
+package com.healthanalysis.app.data.api
+
+import com.healthanalysis.app.data.models.FoodLogRequest
+import com.healthanalysis.app.data.models.FoodLogResponse
+import com.healthanalysis.app.data.models.ProductResponse
+import retrofit2.Response
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Query
+
+interface NutritionApi {
+
+    @GET("nutrition/scan/")
+    suspend fun scanProduct(@Query("barcode") barcode: String): Response<ProductResponse>
+
+    @POST("nutrition/log/")
+    suspend fun logFood(@Body request: FoodLogRequest): Response<FoodLogResponse>
+
+    @GET("nutrition/log/")
+    suspend fun getFoodLogs(): Response<List<FoodLogResponse>>
+}

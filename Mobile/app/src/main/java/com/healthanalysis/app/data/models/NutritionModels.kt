@@ -1,0 +1,28 @@
+package com.healthanalysis.app.data.models
+
+import com.google.gson.annotations.SerializedName
+
+data class ProductResponse(
+    val id: Int,
+    val barcode: String,
+    val name: String,
+    val calories: Double,
+    val proteins: Double,
+    val fats: Double,
+    val carbs: Double,
+    @SerializedName("image_url") val imageUrl: String?
+)
+
+data class FoodLogResponse(
+    val id: Int,
+    val product: ProductResponse,
+    val weight: Int,
+    @SerializedName("meal_type") val mealType: String,
+    @SerializedName("created_at") val createdAt: String
+)
+
+data class FoodLogRequest(
+    @SerializedName("product_id") val productId: Int,
+    val weight: Int,
+    @SerializedName("meal_type") val mealType: String
+)
