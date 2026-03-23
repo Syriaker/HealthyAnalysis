@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.Icon
@@ -33,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.healthanalysis.app.presentation.components.ErrorScreen
-import com.healthanalysis.app.presentation.components.GradientProgressBar
 import com.healthanalysis.app.presentation.components.LoadingScreen
 import com.healthanalysis.app.presentation.theme.*
 import java.time.LocalDate
@@ -41,7 +39,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(
+    viewModel: HomeViewModel = hiltViewModel()
+) {
     val state by viewModel.uiState.collectAsState()
 
     when {
@@ -50,7 +50,7 @@ fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
             message = state.error!!,
             onRetry = { viewModel.loadData() }
         )
-        else -> HomeContent(state)
+        else -> HomeContent(state = state)
     }
 }
 
@@ -131,52 +131,34 @@ private fun HomeContent(state: HomeUiState) {
                 )
                 .padding(24.dp)
         ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column {
-                        Text(
-                            text = "\u041A\u0430\u043B\u043E\u0440\u0438\u0438 \u0441\u0435\u0433\u043E\u0434\u043D\u044F",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.9f)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "${state.caloriesConsumed}",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("\u26A1", fontSize = 24.sp)
-                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "\u041A\u0430\u043B\u043E\u0440\u0438\u0438 \u0441\u0435\u0433\u043E\u0434\u043D\u044F",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.9f)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${state.caloriesConsumed} \u043A\u043A\u0430\u043B",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                GradientProgressBar(
-                    progress = (state.caloriesConsumed.toFloat() / state.caloriesGoal).coerceIn(0f, 1f),
-                    height = 8
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "\u0426\u0435\u043B\u044C: ${state.caloriesGoal} \u043A\u043A\u0430\u043B",
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier.align(Alignment.End)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("\u26A1", fontSize = 24.sp)
+                }
             }
         }
 
@@ -206,27 +188,14 @@ private fun HomeContent(state: HomeUiState) {
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Row(
+            StatCard(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.FavoriteBorder,
-                    iconBg = PurpleBg,
-                    iconColor = Primary,
-                    label = "\u0428\u0430\u0433\u0438",
-                    value = "${state.steps}"
-                )
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.Flag,
-                    iconBg = PurpleBg,
-                    iconColor = Primary,
-                    label = "\u0426\u0435\u043B\u0438",
-                    value = "${state.goalsCompleted}/5"
-                )
-            }
+                icon = Icons.Outlined.FavoriteBorder,
+                iconBg = PurpleBg,
+                iconColor = Primary,
+                label = "\u0428\u0430\u0433\u0438",
+                value = "${state.steps}"
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))

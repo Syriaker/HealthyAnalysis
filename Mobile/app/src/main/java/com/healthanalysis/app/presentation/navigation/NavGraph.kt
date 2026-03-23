@@ -20,6 +20,8 @@ import com.healthanalysis.app.presentation.screens.auth.VerifyScreen
 import com.healthanalysis.app.presentation.screens.food.FoodScreen
 import com.healthanalysis.app.presentation.screens.home.HomeScreen
 import com.healthanalysis.app.presentation.screens.profile.ProfileScreen
+import com.healthanalysis.app.presentation.screens.profile.ProfileSettingsScreen
+import com.healthanalysis.app.presentation.screens.scan.ScanResultScreen
 import com.healthanalysis.app.presentation.screens.tips.TipsScreen
 
 @Composable
@@ -95,12 +97,38 @@ fun AppNavGraph(
                     }
                 )
             }
-            composable(Screen.Home.route) { HomeScreen() }
-            composable(Screen.Food.route) { FoodScreen() }
+            composable(Screen.Home.route) {
+                HomeScreen()
+            }
+            composable(Screen.Food.route) {
+                FoodScreen(
+                    onBarcodeScanned = { barcode ->
+                        navController.navigate("${Screen.ScanResult.route}/${Uri.encode(barcode)}")
+                    }
+                )
+            }
             composable(Screen.Analysis.route) { AnalysisScreen() }
             composable(Screen.Tips.route) { TipsScreen() }
             composable(Screen.Profile.route) {
-                ProfileScreen(onLogout = {})
+                ProfileScreen(
+                    onLogout = {},
+                    onNavigateToSettings = {
+                        navController.navigate(Screen.ProfileSettings.route)
+                    }
+                )
+            }
+            composable(Screen.ProfileSettings.route) {
+                ProfileSettingsScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "${Screen.ScanResult.route}/{barcode}",
+                arguments = listOf(navArgument("barcode") { type = NavType.StringType })
+            ) {
+                ScanResultScreen(
+                    onBack = { navController.popBackStack() }
+                )
             }
         }
     }

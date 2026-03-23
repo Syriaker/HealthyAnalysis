@@ -19,11 +19,7 @@ data class ProfileUiState(
     val height: Int? = null,
     val weight: Double? = null,
     val gender: String? = null,
-    val goals: List<String> = listOf(
-        "\u0421\u043D\u0438\u0437\u0438\u0442\u044C \u0445\u043E\u043B\u0435\u0441\u0442\u0435\u0440\u0438\u043D",
-        "\u041F\u043E\u0432\u044B\u0441\u0438\u0442\u044C \u0436\u0435\u043B\u0435\u0437\u043E",
-        "\u041F\u0438\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435 \u0432\u043E\u0434\u044B"
-    )
+    val goals: List<String> = emptyList()
 )
 
 @HiltViewModel
