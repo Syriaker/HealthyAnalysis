@@ -12,7 +12,6 @@ class ScanProductView(APIView):
 
     @extend_schema(
         summary="Сканировать штрих-код",
-        description="Ищет продукт в локальной БД. Если нет - берет из OpenFoodFacts и сохраняет.",
         parameters=[OpenApiParameter(name='barcode', description='Штрих-код продукта', required=True, type=str)],
         responses={200: ProductSerializer, 404: "Продукт не найден"}
     )
@@ -21,7 +20,6 @@ class ScanProductView(APIView):
 
         if not barcode:
             return Response({'error': 'Укажите параметр barcode'}, status=400)
-
         try:
             product = Product.objects.get(barcode=barcode)
             return Response(ProductSerializer(product).data)
@@ -30,12 +28,21 @@ class ScanProductView(APIView):
 
         off_url = f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
 
+        headers = {
+            'User-Agent': 'HealthyAnalysisApp - Android/iOS - Version 1.0'
+        }
+
         try:
-            response = requests.get(off_url, timeout=5)
+            response = requests.get(off_url, headers=headers, timeout=10)
+
+            if response.status_code != 200:
+                print(f"OFF вернул ошибку: {response.status_code}")
+                return Response({'error': 'Сервер продуктов временно недоступен'}, status=503)
+
             data = response.json()
 
             if data.get('status') == 1:
-                off_product = data['product']
+                off_product = data.get('product', {})
                 nutriments = off_product.get('nutriments', {})
 
                 new_product = Product.objects.create(
@@ -47,17 +54,20 @@ class ScanProductView(APIView):
                     fats=nutriments.get('fat_100g', 0) or 0,
                     carbs=nutriments.get('carbohydrates_100g', 0) or 0
                 )
-
                 return Response(ProductSerializer(new_product).data)
             else:
                 return Response({'error': 'Продукт не найден в глобальной базе'}, status=404)
 
-        except requests.exceptions.RequestException:
-            return Response({'error': 'Ошибка соединения с OpenFoodFacts'}, status=503)
-
-class FoodLogCreateView(generics.CreateAPIView):
+        except Exception as e:
+            print(f"ОШИБКА OPEN FOOD FACTS: {e}")
+            return Response({'error': 'Ошибка соединения с сервером продуктов'}, status=503)
+class FoodLogView(generics.ListCreateAPIView):
     serializer_class = FoodLogSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(summary="Получить список съеденного за всё время")
+    def get_queryset(self):
+        return FoodLog.objects.filter(user=self.request.user).order_by('-created_at')
 
     @extend_schema(summary="Добавить продукт в дневник питания")
     def perform_create(self, serializer):
