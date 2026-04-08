@@ -33,7 +33,8 @@ import com.healthanalysis.app.presentation.theme.*
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -43,7 +44,7 @@ fun ProfileScreen(
             message = state.error!!,
             onRetry = { viewModel.loadData() }
         )
-        else -> ProfileContent(state, viewModel, onLogout)
+        else -> ProfileContent(state, viewModel, onLogout, onNavigateToSettings)
     }
 }
 
@@ -51,7 +52,8 @@ fun ProfileScreen(
 private fun ProfileContent(
     state: ProfileUiState,
     viewModel: ProfileViewModel,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -151,22 +153,23 @@ private fun ProfileContent(
 
         // Menu
         Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp)) {
-            // Health Goals Section
-            Text(
-                "\u0426\u0435\u043B\u0438 \u0437\u0434\u043E\u0440\u043E\u0432\u044C\u044F",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
+            if (state.goals.isNotEmpty()) {
+                Text(
+                    "\u0426\u0435\u043B\u0438 \u0437\u0434\u043E\u0440\u043E\u0432\u044C\u044F",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            state.goals.forEach { goal ->
-                MenuItem(text = goal)
                 Spacer(modifier = Modifier.height(12.dp))
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                state.goals.forEach { goal ->
+                    MenuItem(text = goal)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             // Account Section
             Text(
@@ -183,7 +186,7 @@ private fun ProfileContent(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White)
-                    .clickable { }
+                    .clickable { onNavigateToSettings() }
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
