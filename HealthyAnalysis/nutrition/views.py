@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import Product, FoodLog
 from .serializers import ProductSerializer, FoodLogSerializer
-
+from django.utils import timezone
 
 class ScanProductView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -61,15 +61,28 @@ class ScanProductView(APIView):
         except Exception as e:
             print(f"ОШИБКА OPEN FOOD FACTS: {e}")
             return Response({'error': 'Ошибка соединения с сервером продуктов'}, status=503)
+
+
 class FoodLogView(generics.ListCreateAPIView):
     serializer_class = FoodLogSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    @extend_schema(summary="Получить список съеденного за всё время")
+    @extend_schema(
+        summary="Дневник питания (с фильтром по дате)",
+        description="Если не передать date, вернет еду за СЕГОДНЯ (имитация сброса в 00:00).",
+        parameters=[
+            OpenApiParameter(name='date', description='Дата в формате YYYY-MM-DD', required=False, type=str)
+        ]
+    )
     def get_queryset(self):
-        return FoodLog.objects.filter(user=self.request.user).order_by('-created_at')
+        user = self.request.user
+        date_str = self.request.query_params.get('date')
 
-    @extend_schema(summary="Добавить продукт в дневник питания")
+        if date_str:
+            return FoodLog.objects.filter(user=user, created_at__date=date_str).order_by('-created_at')
+
+        today = timezone.localtime().date()
+        return FoodLog.objects.filter(user=user, created_at__date=today).order_by('-created_at')
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
