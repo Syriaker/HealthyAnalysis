@@ -6,6 +6,7 @@ from .models import Biomarker, ReferenceRange
 from rest_framework import generics
 from drf_spectacular.utils import extend_schema
 from .models import AnalysisRecord
+from .models import AnalysisResult
 from .serializers import AnalysisRecordSerializer
 
 class PersonalNormsView(APIView):
@@ -57,3 +58,30 @@ class AnalysisRecordView(generics.ListCreateAPIView):
     @extend_schema(summary="Добавить результаты анализов (Ручной ввод)")
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class LatestAnalysesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Актуальное состояние здоровья",
+        description="Возвращает самые свежие значения по КАЖДОМУ сданному показателю за всё время."
+    )
+    def get(self, request):
+        user = request.user
+
+        all_results = AnalysisResult.objects.filter(record__user=user).order_by('-record__date')
+
+        latest_results = {}
+        for res in all_results:
+            bio_id = res.biomarker.id
+            if bio_id not in latest_results:
+                latest_results[bio_id] = {
+                    'biomarker_id': bio_id,
+                    'biomarker_name': res.biomarker.name,
+                    'unit': res.biomarker.unit,
+                    'value': res.value,
+                    'status': res.status,
+                    'date': res.record.date
+                }
+        return Response(list(latest_results.values()))
