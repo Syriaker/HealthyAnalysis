@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.time.DayOfWeek
+import java.time.LocalDate
 import javax.inject.Inject
 
 data class DisplayFoodItem(
@@ -14,24 +16,38 @@ data class DisplayFoodItem(
     val carbs: Int
 )
 
+data class DayFoodData(
+    val breakfastItems: List<DisplayFoodItem> = emptyList(),
+    val lunchItems: List<DisplayFoodItem> = emptyList(),
+    val dinnerItems: List<DisplayFoodItem> = emptyList(),
+    val snackItems: List<DisplayFoodItem> = emptyList()
+)
+
 data class FoodUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val searchQuery: String = "",
-    val caloriesConsumed: Int = 0,
-    val proteins: Int = 0,
-    val fats: Int = 0,
-    val carbs: Int = 0,
-    val breakfastItems: List<DisplayFoodItem> = emptyList(),
-    val lunchItems: List<DisplayFoodItem> = emptyList(),
-    val dinnerItems: List<DisplayFoodItem> = emptyList(),
-    val snackItems: List<DisplayFoodItem> = emptyList(),
-    val breakfastCalories: Int = 0,
-    val lunchCalories: Int = 0,
-    val dinnerCalories: Int = 0,
-    val snackCalories: Int = 0,
+    val selectedDate: LocalDate = LocalDate.now(),
+    val foodByDate: Map<String, DayFoodData> = emptyMap(),
     val showAddDialog: Boolean = false
-)
+) {
+    private val selectedDay: DayFoodData get() = foodByDate[selectedDate.toString()] ?: DayFoodData()
+
+    val breakfastItems: List<DisplayFoodItem> get() = selectedDay.breakfastItems
+    val lunchItems: List<DisplayFoodItem> get() = selectedDay.lunchItems
+    val dinnerItems: List<DisplayFoodItem> get() = selectedDay.dinnerItems
+    val snackItems: List<DisplayFoodItem> get() = selectedDay.snackItems
+
+    val breakfastCalories: Int get() = breakfastItems.sumOf { it.calories }
+    val lunchCalories: Int get() = lunchItems.sumOf { it.calories }
+    val dinnerCalories: Int get() = dinnerItems.sumOf { it.calories }
+    val snackCalories: Int get() = snackItems.sumOf { it.calories }
+
+    val caloriesConsumed: Int get() = breakfastCalories + lunchCalories + dinnerCalories + snackCalories
+    val proteins: Int get() = (breakfastItems + lunchItems + dinnerItems + snackItems).sumOf { it.proteins }
+    val fats: Int get() = (breakfastItems + lunchItems + dinnerItems + snackItems).sumOf { it.fats }
+    val carbs: Int get() = (breakfastItems + lunchItems + dinnerItems + snackItems).sumOf { it.carbs }
+}
 
 @HiltViewModel
 class FoodViewModel @Inject constructor() : ViewModel() {
@@ -59,6 +75,31 @@ class FoodViewModel @Inject constructor() : ViewModel() {
         _uiState.value = _uiState.value.copy(showAddDialog = false)
     }
 
+    fun selectDay(date: LocalDate) {
+        if (!date.isAfter(LocalDate.now())) {
+            _uiState.value = _uiState.value.copy(selectedDate = date)
+        }
+    }
+
+    fun previousWeek() {
+        _uiState.value = _uiState.value.copy(
+            selectedDate = _uiState.value.selectedDate.minusWeeks(1)
+        )
+    }
+
+    fun nextWeek() {
+        val current = _uiState.value
+        val today = LocalDate.now()
+        val newDate = current.selectedDate.plusWeeks(1)
+        val todayMonday = today.with(DayOfWeek.MONDAY)
+        val newMonday = newDate.with(DayOfWeek.MONDAY)
+        if (!newMonday.isAfter(todayMonday)) {
+            _uiState.value = current.copy(
+                selectedDate = if (newDate.isAfter(today)) today else newDate
+            )
+        }
+    }
+
     fun addManualEntry(
         name: String,
         calories: Int,
@@ -67,35 +108,46 @@ class FoodViewModel @Inject constructor() : ViewModel() {
         carbs: Int,
         mealType: String
     ) {
-        val entry = DisplayFoodItem(name, calories, proteins, fats, carbs)
         val current = _uiState.value
+        val dateKey = current.selectedDate.toString()
+        val currentDay = current.foodByDate[dateKey] ?: DayFoodData()
+        val entry = DisplayFoodItem(name, calories, proteins, fats, carbs)
 
-        val newState = when (mealType) {
-            "breakfast" -> current.copy(
-                breakfastItems = current.breakfastItems + entry,
-                breakfastCalories = current.breakfastCalories + calories
+        val updatedDay = when (mealType) {
+            "breakfast" -> currentDay.copy(breakfastItems = currentDay.breakfastItems + entry)
+            "lunch" -> currentDay.copy(lunchItems = currentDay.lunchItems + entry)
+            "dinner" -> currentDay.copy(dinnerItems = currentDay.dinnerItems + entry)
+            else -> currentDay.copy(snackItems = currentDay.snackItems + entry)
+        }
+
+        _uiState.value = current.copy(
+            foodByDate = current.foodByDate + (dateKey to updatedDay),
+            showAddDialog = false
+        )
+    }
+
+    fun removeEntry(mealType: String, index: Int) {
+        val current = _uiState.value
+        val dateKey = current.selectedDate.toString()
+        val currentDay = current.foodByDate[dateKey] ?: return
+
+        val updatedDay = when (mealType) {
+            "breakfast" -> currentDay.copy(
+                breakfastItems = currentDay.breakfastItems.filterIndexed { i, _ -> i != index }
             )
-            "lunch" -> current.copy(
-                lunchItems = current.lunchItems + entry,
-                lunchCalories = current.lunchCalories + calories
+            "lunch" -> currentDay.copy(
+                lunchItems = currentDay.lunchItems.filterIndexed { i, _ -> i != index }
             )
-            "dinner" -> current.copy(
-                dinnerItems = current.dinnerItems + entry,
-                dinnerCalories = current.dinnerCalories + calories
+            "dinner" -> currentDay.copy(
+                dinnerItems = currentDay.dinnerItems.filterIndexed { i, _ -> i != index }
             )
-            else -> current.copy(
-                snackItems = current.snackItems + entry,
-                snackCalories = current.snackCalories + calories
+            else -> currentDay.copy(
+                snackItems = currentDay.snackItems.filterIndexed { i, _ -> i != index }
             )
         }
 
-        val allItems = newState.breakfastItems + newState.lunchItems + newState.dinnerItems + newState.snackItems
-        _uiState.value = newState.copy(
-            caloriesConsumed = newState.breakfastCalories + newState.lunchCalories + newState.dinnerCalories + newState.snackCalories,
-            proteins = allItems.sumOf { it.proteins },
-            fats = allItems.sumOf { it.fats },
-            carbs = allItems.sumOf { it.carbs },
-            showAddDialog = false
+        _uiState.value = current.copy(
+            foodByDate = current.foodByDate + (dateKey to updatedDay)
         )
     }
 }
