@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -86,51 +85,25 @@ private fun HomeContent(
             .background(Background)
             .verticalScroll(rememberScrollState())
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+                .padding(24.dp)
         ) {
-            Column {
-                Text(
-                    text = "Добро пожаловать! 👋",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = LocalDate.now().format(
-                        DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))
-                    ),
-                    fontSize = 13.sp,
-                    color = TextSecondary
-                )
-            }
-            Box {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Notifications,
-                        contentDescription = null,
-                        tint = Primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(RedText)
-                        .align(Alignment.TopEnd)
-                )
-            }
+            Text(
+                text = "Добро пожаловать! 👋",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = LocalDate.now().format(
+                    DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))
+                ),
+                fontSize = 13.sp,
+                color = TextSecondary
+            )
         }
 
         Box(

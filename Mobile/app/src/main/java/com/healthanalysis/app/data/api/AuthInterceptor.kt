@@ -37,51 +37,49 @@ class AuthInterceptor @Inject constructor(
 
         val response = chain.proceed(request)
 
-        if (response.code == 401) {
-            val refreshToken = runBlocking { tokenManager.getRefreshTokenSync() }
-            if (refreshToken == null) {
-                return response
-            }
-            response.close()
-
-            val refreshUrl = originalRequest.url.newBuilder()
-                .encodedPath("/api/auth/token/refresh/")
-                .build()
-            val refreshRequest = originalRequest.newBuilder()
-                .url(refreshUrl)
-                .post(
-                    """{"refresh":"$refreshToken"}"""
-                        .toRequestBody("application/json".toMediaType())
-                )
-                .build()
-
-            val refreshResponse = chain.proceed(refreshRequest)
-
-            if (refreshResponse.isSuccessful) {
-                val body = refreshResponse.body?.string()
-                val newAccessToken = body?.let {
-                    try {
-                        JSONObject(it).getString("access")
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-
-                refreshResponse.close()
-
-                val token = newAccessToken ?: return chain.proceed(originalRequest)
-                runBlocking { tokenManager.updateAccessToken(token) }
-
-                val newRequest = originalRequest.newBuilder()
-                    .header("Authorization", "Bearer $token")
-                    .build()
-                return chain.proceed(newRequest)
-            } else {
-                refreshResponse.close()
-                runBlocking { tokenManager.clearTokens() }
-            }
+        if (response.code != 401) {
+            return response
         }
 
-        return response
+        val refreshToken = runBlocking { tokenManager.getRefreshTokenSync() }
+            ?: return response
+
+        response.close()
+
+        val refreshUrl = originalRequest.url.newBuilder()
+            .encodedPath("/api/auth/token/refresh/")
+            .build()
+        val refreshRequest = originalRequest.newBuilder()
+            .url(refreshUrl)
+            .post(
+                """{"refresh":"$refreshToken"}"""
+                    .toRequestBody("application/json".toMediaType())
+            )
+            .build()
+
+        val refreshResponse = chain.proceed(refreshRequest)
+
+        if (!refreshResponse.isSuccessful) {
+            refreshResponse.close()
+            runBlocking { tokenManager.clearTokens() }
+            return chain.proceed(request)
+        }
+
+        val body = refreshResponse.body?.string()
+        refreshResponse.close()
+        val newAccessToken = body?.let {
+            try {
+                JSONObject(it).getString("access")
+            } catch (e: Exception) {
+                null
+            }
+        } ?: return chain.proceed(request)
+
+        runBlocking { tokenManager.updateAccessToken(newAccessToken) }
+
+        val newRequest = originalRequest.newBuilder()
+            .header("Authorization", "Bearer $newAccessToken")
+            .build()
+        return chain.proceed(newRequest)
     }
 }

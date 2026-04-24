@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.healthanalysis.app.presentation.components.ErrorScreen
 import com.healthanalysis.app.presentation.components.LoadingScreen
 import com.healthanalysis.app.presentation.theme.*
 
@@ -39,6 +40,10 @@ fun ProfileSettingsScreen(
 
     when {
         state.isLoading -> LoadingScreen()
+        state.loadError != null -> ErrorScreen(
+            message = state.loadError!!,
+            onRetry = { viewModel.loadProfile() }
+        )
         else -> SettingsContent(state, viewModel, onBack)
     }
 }
@@ -49,7 +54,7 @@ private fun SettingsContent(
     viewModel: ProfileSettingsViewModel,
     onBack: () -> Unit
 ) {
-    val genders = listOf("male" to "\u041C\u0443\u0436\u0441\u043A\u043E\u0439", "female" to "\u0416\u0435\u043D\u0441\u043A\u0438\u0439")
+    val genders = listOf("M" to "\u041C\u0443\u0436\u0441\u043A\u043E\u0439", "F" to "\u0416\u0435\u043D\u0441\u043A\u0438\u0439")
 
     Column(
         modifier = Modifier
@@ -209,7 +214,7 @@ private fun SettingsContent(
 
             if (state.error != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(state.error, color = RedText, fontSize = 13.sp)
+                Text(state.error ?: "", color = RedText, fontSize = 13.sp)
             }
         }
 

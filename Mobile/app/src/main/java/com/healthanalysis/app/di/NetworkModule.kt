@@ -1,9 +1,11 @@
 package com.healthanalysis.app.di
 
+import com.healthanalysis.app.data.api.AnalysesApi
 import com.healthanalysis.app.data.api.AuthApi
 import com.healthanalysis.app.data.api.AuthInterceptor
 import com.healthanalysis.app.data.api.NutritionApi
 import com.healthanalysis.app.data.api.ProfileApi
+import com.healthanalysis.app.data.api.RetryInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,16 +25,21 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
+    fun provideOkHttpClient(
+        authInterceptor: AuthInterceptor,
+        retryInterceptor: RetryInterceptor
+    ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         }
         return OkHttpClient.Builder()
+            .addInterceptor(retryInterceptor)
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -62,5 +69,11 @@ object NetworkModule {
     @Singleton
     fun provideNutritionApi(retrofit: Retrofit): NutritionApi {
         return retrofit.create(NutritionApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAnalysesApi(retrofit: Retrofit): AnalysesApi {
+        return retrofit.create(AnalysesApi::class.java)
     }
 }
