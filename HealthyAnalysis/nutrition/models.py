@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-
+from django.utils import timezone
 
 class Product(models.Model):
     barcode = models.CharField("Штрих-код", max_length=100, unique=True, null=True, blank=True, db_index=True)
@@ -34,3 +34,14 @@ class FoodLog(models.Model):
 
     def __str__(self):
         return f"{self.user.email} съел {self.product.name} ({self.weight}г)"
+
+class DailyWater(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='water_logs')
+    date = models.DateField("Дата", default=timezone.localdate)
+    amount = models.PositiveIntegerField("Выпито воды (мл)", default=0)
+
+    class Meta:
+        unique_together = ('user', 'date')
+
+    def __str__(self):
+        return f"{self.user.email} - {self.date}: {self.amount} мл"

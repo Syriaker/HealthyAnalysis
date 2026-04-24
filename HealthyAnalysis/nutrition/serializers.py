@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Product, FoodLog
+from .models import Product, FoodLog, DailyWater
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -10,6 +10,11 @@ class CustomProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields =['id', 'name', 'calories', 'proteins', 'fats', 'carbs']
+
+class DailyWaterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailyWater
+        fields = ['date', 'amount']
 
 class FoodLogSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)

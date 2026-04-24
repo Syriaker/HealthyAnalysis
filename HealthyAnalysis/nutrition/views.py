@@ -3,8 +3,8 @@ from rest_framework.views import APIView
 from rest_framework import generics, permissions
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
-from .models import Product, FoodLog
-from .serializers import ProductSerializer, FoodLogSerializer, CustomProductSerializer
+from .models import Product, FoodLog, DailyWater
+from .serializers import ProductSerializer, FoodLogSerializer, CustomProductSerializer, DailyWaterSerializer
 from django.utils import timezone
 
 class ScanProductView(APIView):
@@ -108,3 +108,63 @@ class FoodLogDetailView(generics.RetrieveDestroyAPIView):
     )
     def get_queryset(self):
         return FoodLog.objects.filter(user=self.request.user)
+
+
+class WaterTrackerView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Получить выпитую воду",
+        description="Возвращает количество воды за указанную дату (или за сегодня).",
+        parameters=[
+            OpenApiParameter('date', str, description='Дата YYYY-MM-DD. По умолчанию - сегодня.', required=False)]
+    )
+    def get(self, request):
+        date_str = request.query_params.get('date') or timezone.localdate().isoformat()
+        water, _ = DailyWater.objects.get_or_create(user=request.user, date=date_str)
+        return Response(DailyWaterSerializer(water).data)
+
+    @extend_schema(
+        summary="Добавить выпитую воду (+ стакан)",
+        description="ПРИБАВЛЯЕТ указанное количество мл к текущему значению.",
+        request=DailyWaterSerializer,
+    )
+    def post(self, request):
+        date_str = request.data.get('date') or timezone.localdate().isoformat()
+        try:
+            add_amount = int(request.data.get('amount', 0))
+        except ValueError:
+            return Response({"error": "amount должен быть числом"}, status=400)
+
+        water, _ = DailyWater.objects.get_or_create(user=request.user, date=date_str)
+        water.amount += add_amount
+        water.save()
+
+        return Response(DailyWaterSerializer(water).data)
+
+    @extend_schema(
+        summary="Изменить выпитую воду (жесткая установка)",
+        description="ПЕРЕЗАПИСЫВАЕТ значение воды (для исправления ошибок).",
+        request=DailyWaterSerializer,
+    )
+    def patch(self, request):
+        date_str = request.data.get('date') or timezone.localdate().isoformat()
+        try:
+            exact_amount = int(request.data.get('amount', 0))
+        except ValueError:
+            return Response({"error": "amount должен быть числом"}, status=400)
+
+        water, _ = DailyWater.objects.get_or_create(user=request.user, date=date_str)
+        water.amount = exact_amount
+        water.save()
+
+        return Response(DailyWaterSerializer(water).data)
+
+    @extend_schema(
+        summary="Сбросить воду за день в 0",
+        parameters=[OpenApiParameter('date', str, description='Дата YYYY-MM-DD.', required=False)]
+    )
+    def delete(self, request):
+        date_str = request.query_params.get('date') or timezone.localdate().isoformat()
+        DailyWater.objects.filter(user=request.user, date=date_str).update(amount=0)
+        return Response({'message': f'Вода за {date_str} сброшена до 0 мл'}, status=200)
