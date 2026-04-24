@@ -1,9 +1,12 @@
 package com.healthanalysis.app.presentation.screens.food
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.healthanalysis.app.data.repository.NutritionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import javax.inject.Inject
@@ -50,17 +53,71 @@ data class FoodUiState(
 }
 
 @HiltViewModel
-class FoodViewModel @Inject constructor() : ViewModel() {
+class FoodViewModel @Inject constructor(
+    private val nutritionRepository: NutritionRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FoodUiState())
     val uiState: StateFlow<FoodUiState> = _uiState
 
     init {
-        loadData()
+        loadData(showFullLoader = true)
     }
 
-    fun loadData() {
-        _uiState.value = _uiState.value.copy(isLoading = false)
+    // Вызывается при возврате на экран (lifecycle ON_RESUME) и при первом запуске.
+    fun loadData(showFullLoader: Boolean = false) {
+        val dateKey = _uiState.value.selectedDate.toString()
+        viewModelScope.launch {
+            if (showFullLoader) {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            }
+            nutritionRepository.getFoodLogs(dateKey)
+                .onSuccess { logs ->
+                    val breakfast = mutableListOf<DisplayFoodItem>()
+                    val lunch = mutableListOf<DisplayFoodItem>()
+                    val dinner = mutableListOf<DisplayFoodItem>()
+                    val snack = mutableListOf<DisplayFoodItem>()
+
+                    logs.forEach { log ->
+                        val multiplier = log.weight / 100.0
+                        val item = DisplayFoodItem(
+                            name = log.product.name,
+                            calories = (log.product.calories * multiplier).toInt(),
+                            proteins = (log.product.proteins * multiplier).toInt(),
+                            fats = (log.product.fats * multiplier).toInt(),
+                            carbs = (log.product.carbs * multiplier).toInt()
+                        )
+                        when (log.mealType) {
+                            "breakfast" -> breakfast.add(item)
+                            "lunch" -> lunch.add(item)
+                            "dinner" -> dinner.add(item)
+                            else -> snack.add(item)
+                        }
+                    }
+
+                    val dayData = DayFoodData(breakfast, lunch, dinner, snack)
+                    val current = _uiState.value
+                    _uiState.value = current.copy(
+                        isLoading = false,
+                        error = null,
+                        foodByDate = current.foodByDate + (dateKey to dayData)
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = e.message ?: "Ошибка загрузки данных"
+                    )
+                }
+        }
+    }
+
+    // Загружает данные только если для этой даты ещё нет кэша.
+    private fun loadIfNotCached() {
+        val dateKey = _uiState.value.selectedDate.toString()
+        if (!_uiState.value.foodByDate.containsKey(dateKey)) {
+            loadData()
+        }
     }
 
     fun onSearchQueryChanged(query: String) {
@@ -78,6 +135,7 @@ class FoodViewModel @Inject constructor() : ViewModel() {
     fun selectDay(date: LocalDate) {
         if (!date.isAfter(LocalDate.now())) {
             _uiState.value = _uiState.value.copy(selectedDate = date)
+            loadIfNotCached()
         }
     }
 
@@ -85,6 +143,7 @@ class FoodViewModel @Inject constructor() : ViewModel() {
         _uiState.value = _uiState.value.copy(
             selectedDate = _uiState.value.selectedDate.minusWeeks(1)
         )
+        loadIfNotCached()
     }
 
     fun nextWeek() {
@@ -97,9 +156,12 @@ class FoodViewModel @Inject constructor() : ViewModel() {
             _uiState.value = current.copy(
                 selectedDate = if (newDate.isAfter(today)) today else newDate
             )
+            loadIfNotCached()
         }
     }
 
+    // Ручное добавление — хранится локально (бэкенд требует product_id,
+    // доступный только после сканирования штрих-кода).
     fun addManualEntry(
         name: String,
         calories: Int,

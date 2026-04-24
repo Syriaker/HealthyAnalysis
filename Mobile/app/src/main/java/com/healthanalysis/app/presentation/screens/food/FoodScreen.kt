@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.RGBLuminanceSource
@@ -80,6 +81,12 @@ fun FoodScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    // Перезагружаем данные при каждом возврате на экран (в т.ч. после ScanResultScreen).
+    LifecycleResumeEffect(Unit) {
+        viewModel.loadData()
+        onPauseOrDispose {}
+    }
 
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         result.contents?.let { barcode -> onBarcodeScanned(barcode) }

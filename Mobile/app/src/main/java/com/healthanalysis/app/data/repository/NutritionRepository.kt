@@ -39,9 +39,9 @@ class NutritionRepository @Inject constructor(
         }
     }
 
-    suspend fun getFoodLogs(): Result<List<FoodLogResponse>> {
+    suspend fun getFoodLogs(date: String? = null): Result<List<FoodLogResponse>> {
         return try {
-            val response = nutritionApi.getFoodLogs()
+            val response = nutritionApi.getFoodLogs(date)
             if (response.isSuccessful) {
                 Result.success(response.body() ?: emptyList())
             } else {

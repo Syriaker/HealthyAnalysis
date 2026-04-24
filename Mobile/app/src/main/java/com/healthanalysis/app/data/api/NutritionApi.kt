@@ -18,5 +18,5 @@ interface NutritionApi {
     suspend fun logFood(@Body request: FoodLogRequest): Response<FoodLogResponse>
 
     @GET("nutrition/log/")
-    suspend fun getFoodLogs(): Response<List<FoodLogResponse>>
+    suspend fun getFoodLogs(@Query("date") date: String? = null): Response<List<FoodLogResponse>>
 }
