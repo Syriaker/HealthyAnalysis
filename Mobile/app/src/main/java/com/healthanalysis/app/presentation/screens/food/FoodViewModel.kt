@@ -14,6 +14,7 @@ import java.time.LocalDate
 import javax.inject.Inject
 
 data class DisplayFoodItem(
+    val logId: Int?,
     val name: String,
     val calories: Int,
     val proteins: Int,
@@ -36,7 +37,8 @@ data class FoodUiState(
     val foodByDate: Map<String, DayFoodData> = emptyMap(),
     val showAddDialog: Boolean = false,
     val isAddingFood: Boolean = false,
-    val addError: String? = null
+    val addError: String? = null,
+    val deletingLogIds: Set<Int> = emptySet()
 ) {
     private val selectedDay: DayFoodData get() = foodByDate[selectedDate.toString()] ?: DayFoodData()
 
@@ -68,7 +70,6 @@ class FoodViewModel @Inject constructor(
         loadData(showFullLoader = true)
     }
 
-    // Вызывается при возврате на экран (lifecycle ON_RESUME) и при первом запуске.
     fun loadData(showFullLoader: Boolean = false) {
         val dateKey = _uiState.value.selectedDate.toString()
         viewModelScope.launch {
@@ -85,6 +86,7 @@ class FoodViewModel @Inject constructor(
                     logs.forEach { log ->
                         val multiplier = log.weight / 100.0
                         val item = DisplayFoodItem(
+                            logId = log.id,
                             name = log.product.name,
                             calories = (log.product.calories * multiplier).toInt(),
                             proteins = (log.product.proteins * multiplier).toInt(),
@@ -116,7 +118,6 @@ class FoodViewModel @Inject constructor(
         }
     }
 
-    // Загружает данные только если для этой даты ещё нет кэша.
     private fun loadIfNotCached() {
         val dateKey = _uiState.value.selectedDate.toString()
         if (!_uiState.value.foodByDate.containsKey(dateKey)) {
@@ -164,10 +165,6 @@ class FoodViewModel @Inject constructor(
         }
     }
 
-    // Шаг 1: POST /nutrition/products/custom/ → получаем product_id.
-    // Шаг 2: POST /nutrition/log/ с product_id и weight=100
-    //   (вес 100 г означает, что nutrition-значения совпадают с введёнными пользователем).
-    // Продукт добавляется на экран только после успешного ответа 201 от сервера.
     fun addManualEntry(
         name: String,
         calories: Int,
@@ -227,28 +224,49 @@ class FoodViewModel @Inject constructor(
         }
     }
 
-    fun removeEntry(mealType: String, index: Int) {
+    // Если у элемента есть logId — сначала DELETE на сервер, убираем из UI только после 204.
+    // Если logId == null (локальный элемент) — убираем сразу.
+    fun removeEntry(logId: Int?, mealType: String) {
         val current = _uiState.value
         val dateKey = current.selectedDate.toString()
         val currentDay = current.foodByDate[dateKey] ?: return
 
-        val updatedDay = when (mealType) {
-            "breakfast" -> currentDay.copy(
-                breakfastItems = currentDay.breakfastItems.filterIndexed { i, _ -> i != index }
-            )
-            "lunch" -> currentDay.copy(
-                lunchItems = currentDay.lunchItems.filterIndexed { i, _ -> i != index }
-            )
-            "dinner" -> currentDay.copy(
-                dinnerItems = currentDay.dinnerItems.filterIndexed { i, _ -> i != index }
-            )
-            else -> currentDay.copy(
-                snackItems = currentDay.snackItems.filterIndexed { i, _ -> i != index }
-            )
+        if (logId == null) {
+            // Локальная запись без ID — просто убираем из state
+            val updatedDay = removeByLogId(currentDay, mealType, null)
+            _uiState.value = current.copy(foodByDate = current.foodByDate + (dateKey to updatedDay))
+            return
         }
 
-        _uiState.value = current.copy(
-            foodByDate = current.foodByDate + (dateKey to updatedDay)
-        )
+        _uiState.value = current.copy(deletingLogIds = current.deletingLogIds + logId)
+
+        viewModelScope.launch {
+            nutritionRepository.deleteLog(logId)
+                .onSuccess {
+                    val c = _uiState.value
+                    val day = c.foodByDate[dateKey] ?: return@onSuccess
+                    val updatedDay = removeByLogId(day, mealType, logId)
+                    _uiState.value = c.copy(
+                        foodByDate = c.foodByDate + (dateKey to updatedDay),
+                        deletingLogIds = c.deletingLogIds - logId
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        deletingLogIds = _uiState.value.deletingLogIds - logId,
+                        error = e.message ?: "Не удалось удалить запись"
+                    )
+                }
+        }
+    }
+
+    private fun removeByLogId(day: DayFoodData, mealType: String, logId: Int?): DayFoodData {
+        val predicate: (DisplayFoodItem) -> Boolean = { it.logId != logId }
+        return when (mealType) {
+            "breakfast" -> day.copy(breakfastItems = day.breakfastItems.filter(predicate))
+            "lunch" -> day.copy(lunchItems = day.lunchItems.filter(predicate))
+            "dinner" -> day.copy(dinnerItems = day.dinnerItems.filter(predicate))
+            else -> day.copy(snackItems = day.snackItems.filter(predicate))
+        }
     }
 }

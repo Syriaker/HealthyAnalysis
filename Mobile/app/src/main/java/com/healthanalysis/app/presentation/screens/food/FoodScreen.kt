@@ -130,7 +130,7 @@ fun FoodScreen(
             onDaySelected = { viewModel.selectDay(it) },
             onShowAddDialog = { viewModel.showAddDialog() },
             onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
-            onDeleteItem = { mealType, index -> viewModel.removeEntry(mealType, index) }
+            onDeleteItem = { logId, mealType -> viewModel.removeEntry(logId, mealType) }
         )
     }
 
@@ -156,7 +156,7 @@ private fun FoodContent(
     onDaySelected: (LocalDate) -> Unit,
     onShowAddDialog: () -> Unit,
     onSearchQueryChanged: (String) -> Unit,
-    onDeleteItem: (mealType: String, index: Int) -> Unit
+    onDeleteItem: (logId: Int?, mealType: String) -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -272,22 +272,26 @@ private fun FoodContent(
             MealSection(
                 title = "Завтрак", emoji = "🍳",
                 calories = state.breakfastCalories, items = state.breakfastItems,
-                onDeleteItem = { index -> onDeleteItem("breakfast", index) }
+                deletingLogIds = state.deletingLogIds,
+                onDeleteItem = { logId -> onDeleteItem(logId, "breakfast") }
             )
             MealSection(
                 title = "Обед", emoji = "🍜",
                 calories = state.lunchCalories, items = state.lunchItems,
-                onDeleteItem = { index -> onDeleteItem("lunch", index) }
+                deletingLogIds = state.deletingLogIds,
+                onDeleteItem = { logId -> onDeleteItem(logId, "lunch") }
             )
             MealSection(
                 title = "Ужин", emoji = "🍕",
                 calories = state.dinnerCalories, items = state.dinnerItems,
-                onDeleteItem = { index -> onDeleteItem("dinner", index) }
+                deletingLogIds = state.deletingLogIds,
+                onDeleteItem = { logId -> onDeleteItem(logId, "dinner") }
             )
             MealSection(
                 title = "Перекус", emoji = "🍎",
                 calories = state.snackCalories, items = state.snackItems,
-                onDeleteItem = { index -> onDeleteItem("snack", index) }
+                deletingLogIds = state.deletingLogIds,
+                onDeleteItem = { logId -> onDeleteItem(logId, "snack") }
             )
         }
 
@@ -445,7 +449,8 @@ private fun MealSection(
     emoji: String,
     calories: Int,
     items: List<DisplayFoodItem>,
-    onDeleteItem: (Int) -> Unit
+    deletingLogIds: Set<Int>,
+    onDeleteItem: (logId: Int?) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 24.dp)) {
         Row(
@@ -497,8 +502,12 @@ private fun MealSection(
                 )
             }
         } else {
-            items.forEachIndexed { index, item ->
-                FoodItemCard(item, onDelete = { onDeleteItem(index) })
+            items.forEach { item ->
+                FoodItemCard(
+                    item = item,
+                    isDeleting = item.logId != null && item.logId in deletingLogIds,
+                    onDelete = { onDeleteItem(item.logId) }
+                )
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
@@ -508,7 +517,7 @@ private fun MealSection(
 }
 
 @Composable
-private fun FoodItemCard(item: DisplayFoodItem, onDelete: () -> Unit) {
+private fun FoodItemCard(item: DisplayFoodItem, isDeleting: Boolean, onDelete: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -549,14 +558,23 @@ private fun FoodItemCard(item: DisplayFoodItem, onDelete: () -> Unit) {
         Spacer(modifier = Modifier.width(4.dp))
         IconButton(
             onClick = onDelete,
+            enabled = !isDeleting,
             modifier = Modifier.size(36.dp)
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Delete,
-                contentDescription = "Удалить",
-                tint = Color(0xFFEF4444),
-                modifier = Modifier.size(18.dp)
-            )
+            if (isDeleting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = Color(0xFFEF4444)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = "Удалить",
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

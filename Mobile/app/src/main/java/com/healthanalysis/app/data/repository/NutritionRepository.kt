@@ -55,6 +55,19 @@ class NutritionRepository @Inject constructor(
         }
     }
 
+    suspend fun deleteLog(id: Int): Result<Unit> {
+        return try {
+            val response = nutritionApi.deleteLog(id)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Ошибка ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getFoodLogs(date: String? = null): Result<List<FoodLogResponse>> {
         return try {
             val response = nutritionApi.getFoodLogs(date)

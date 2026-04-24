@@ -7,8 +7,10 @@ import com.healthanalysis.app.data.models.FoodLogResponse
 import com.healthanalysis.app.data.models.ProductResponse
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface NutritionApi {
@@ -24,4 +26,7 @@ interface NutritionApi {
 
     @GET("nutrition/log/")
     suspend fun getFoodLogs(@Query("date") date: String? = null): Response<List<FoodLogResponse>>
+
+    @DELETE("nutrition/log/{id}/")
+    suspend fun deleteLog(@Path("id") id: Int): Response<Unit>
 }
