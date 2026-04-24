@@ -97,3 +97,14 @@ class CustomProductCreateView(generics.CreateAPIView):
     )
     def perform_create(self, serializer):
         serializer.save()
+
+class FoodLogDetailView(generics.RetrieveDestroyAPIView):
+    serializer_class = FoodLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Удалить запись из дневника",
+        description="Удаляет съеденный продукт по его ID. Пользователь может удалять только свои записи."
+    )
+    def get_queryset(self):
+        return FoodLog.objects.filter(user=self.request.user)
