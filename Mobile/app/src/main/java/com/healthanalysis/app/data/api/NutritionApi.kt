@@ -1,5 +1,7 @@
 package com.healthanalysis.app.data.api
 
+import com.healthanalysis.app.data.models.CustomProductRequest
+import com.healthanalysis.app.data.models.CustomProductResponse
 import com.healthanalysis.app.data.models.FoodLogRequest
 import com.healthanalysis.app.data.models.FoodLogResponse
 import com.healthanalysis.app.data.models.ProductResponse
@@ -14,9 +16,12 @@ interface NutritionApi {
     @GET("nutrition/scan/")
     suspend fun scanProduct(@Query("barcode") barcode: String): Response<ProductResponse>
 
+    @POST("nutrition/products/custom/")
+    suspend fun createCustomProduct(@Body request: CustomProductRequest): Response<CustomProductResponse>
+
     @POST("nutrition/log/")
     suspend fun logFood(@Body request: FoodLogRequest): Response<FoodLogResponse>
 
     @GET("nutrition/log/")
-    suspend fun getFoodLogs(): Response<List<FoodLogResponse>>
+    suspend fun getFoodLogs(@Query("date") date: String? = null): Response<List<FoodLogResponse>>
 }

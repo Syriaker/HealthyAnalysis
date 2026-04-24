@@ -1,6 +1,8 @@
 package com.healthanalysis.app.data.repository
 
 import com.healthanalysis.app.data.api.NutritionApi
+import com.healthanalysis.app.data.models.CustomProductRequest
+import com.healthanalysis.app.data.models.CustomProductResponse
 import com.healthanalysis.app.data.models.FoodLogRequest
 import com.healthanalysis.app.data.models.FoodLogResponse
 import com.healthanalysis.app.data.models.ProductResponse
@@ -25,6 +27,20 @@ class NutritionRepository @Inject constructor(
         }
     }
 
+    suspend fun createCustomProduct(request: CustomProductRequest): Result<CustomProductResponse> {
+        return try {
+            val response = nutritionApi.createCustomProduct(request)
+            if (response.isSuccessful) {
+                response.body()?.let { Result.success(it) }
+                    ?: Result.failure(Exception("Пустой ответ сервера"))
+            } else {
+                Result.failure(Exception("Ошибка ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun logFood(request: FoodLogRequest): Result<FoodLogResponse> {
         return try {
             val response = nutritionApi.logFood(request)
@@ -39,9 +55,9 @@ class NutritionRepository @Inject constructor(
         }
     }
 
-    suspend fun getFoodLogs(): Result<List<FoodLogResponse>> {
+    suspend fun getFoodLogs(date: String? = null): Result<List<FoodLogResponse>> {
         return try {
-            val response = nutritionApi.getFoodLogs()
+            val response = nutritionApi.getFoodLogs(date)
             if (response.isSuccessful) {
                 Result.success(response.body() ?: emptyList())
             } else {

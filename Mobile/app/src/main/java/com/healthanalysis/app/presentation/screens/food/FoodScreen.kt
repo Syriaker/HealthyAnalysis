@@ -10,11 +10,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Search
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.RGBLuminanceSource
@@ -41,6 +44,8 @@ import com.healthanalysis.app.presentation.components.LoadingScreen
 import com.healthanalysis.app.presentation.theme.*
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import java.time.DayOfWeek
+import java.time.LocalDate
 
 private fun decodeBarcodeFromUri(context: Context, uri: Uri): String? {
     return try {
@@ -57,6 +62,18 @@ private fun decodeBarcodeFromUri(context: Context, uri: Uri): String? {
     }
 }
 
+private fun calorieLabelForDate(date: LocalDate): String {
+    val today = LocalDate.now()
+    if (date == today) return "Съедено сегодня"
+    if (date == today.minusDays(1)) return "Съедено вчера"
+    val months = arrayOf(
+        "янв", "фев", "мар", "апр",
+        "мая", "июн", "июл", "авг",
+        "сен", "окт", "ноя", "дек"
+    )
+    return "Съедено ${date.dayOfMonth} ${months[date.monthValue - 1]}"
+}
+
 @Composable
 fun FoodScreen(
     viewModel: FoodViewModel = hiltViewModel(),
@@ -64,6 +81,12 @@ fun FoodScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    // Перезагружаем данные при каждом возврате на экран (в т.ч. после ScanResultScreen).
+    LifecycleResumeEffect(Unit) {
+        viewModel.loadData()
+        onPauseOrDispose {}
+    }
 
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         result.contents?.let { barcode -> onBarcodeScanned(barcode) }
@@ -75,10 +98,10 @@ fun FoodScreen(
         uri?.let {
             val barcode = decodeBarcodeFromUri(context, it)
             if (barcode != null) {
-                Toast.makeText(context, "\u0428\u0442\u0440\u0438\u0445-\u043A\u043E\u0434: $barcode", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Штрих-код: $barcode", Toast.LENGTH_SHORT).show()
                 onBarcodeScanned(barcode)
             } else {
-                Toast.makeText(context, "\u0428\u0442\u0440\u0438\u0445-\u043A\u043E\u0434 \u043D\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Штрих-код не распознан", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -91,23 +114,30 @@ fun FoodScreen(
         )
         else -> FoodContent(
             state = state,
-            viewModel = viewModel,
             onScanBarcode = {
                 scanLauncher.launch(
                     ScanOptions().apply {
                         setDesiredBarcodeFormats(ScanOptions.ALL_CODE_TYPES)
-                        setPrompt("\u041D\u0430\u0432\u0435\u0434\u0438\u0442\u0435 \u043A\u0430\u043C\u0435\u0440\u0443 \u043D\u0430 \u0448\u0442\u0440\u0438\u0445-\u043A\u043E\u0434")
+                        setPrompt("Наведите камеру на штрих-код")
                         setBeepEnabled(true)
                         setOrientationLocked(true)
                     }
                 )
             },
-            onPickPhoto = { imagePickerLauncher.launch("image/*") }
+            onPickPhoto = { imagePickerLauncher.launch("image/*") },
+            onPreviousWeek = { viewModel.previousWeek() },
+            onNextWeek = { viewModel.nextWeek() },
+            onDaySelected = { viewModel.selectDay(it) },
+            onShowAddDialog = { viewModel.showAddDialog() },
+            onSearchQueryChanged = { viewModel.onSearchQueryChanged(it) },
+            onDeleteItem = { mealType, index -> viewModel.removeEntry(mealType, index) }
         )
     }
 
     if (state.showAddDialog) {
         AddFoodDialog(
+            isAdding = state.isAddingFood,
+            addError = state.addError,
             onDismiss = { viewModel.hideAddDialog() },
             onAdd = { name, cal, prot, fat, carb, meal ->
                 viewModel.addManualEntry(name, cal, prot, fat, carb, meal)
@@ -119,9 +149,14 @@ fun FoodScreen(
 @Composable
 private fun FoodContent(
     state: FoodUiState,
-    viewModel: FoodViewModel,
     onScanBarcode: () -> Unit,
-    onPickPhoto: () -> Unit
+    onPickPhoto: () -> Unit,
+    onPreviousWeek: () -> Unit,
+    onNextWeek: () -> Unit,
+    onDaySelected: (LocalDate) -> Unit,
+    onShowAddDialog: () -> Unit,
+    onSearchQueryChanged: (String) -> Unit,
+    onDeleteItem: (mealType: String, index: Int) -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -132,28 +167,38 @@ private fun FoodContent(
                 .padding(bottom = 100.dp)
         ) {
             // Header
-            Column(modifier = Modifier.padding(24.dp)) {
+            Column(modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 16.dp)) {
                 Text(
-                    text = "\u0422\u0440\u0435\u043A\u0435\u0440 \u043F\u0438\u0442\u0430\u043D\u0438\u044F",
+                    text = "Трекер питания",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "\u041E\u0442\u0441\u043B\u0435\u0436\u0438\u0432\u0430\u0439\u0442\u0435 \u043A\u0430\u043B\u043E\u0440\u0438\u0438 \u0438 \u043C\u0430\u043A\u0440\u043E\u043D\u0443\u0442\u0440\u0438\u0435\u043D\u0442\u044B",
+                    text = "Отслеживайте калории и макронутриенты",
                     fontSize = 14.sp,
                     color = TextSecondary
                 )
             }
 
+            // Week Calendar
+            WeekCalendar(
+                selectedDate = state.selectedDate,
+                onDaySelected = onDaySelected,
+                onPreviousWeek = onPreviousWeek,
+                onNextWeek = onNextWeek
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Search Bar
             TextField(
                 value = state.searchQuery,
-                onValueChange = { viewModel.onSearchQueryChanged(it) },
+                onValueChange = onSearchQueryChanged,
                 placeholder = {
                     Text(
-                        "\u041F\u043E\u0438\u0441\u043A \u043F\u0440\u043E\u0434\u0443\u043A\u0442\u043E\u0432...",
+                        "Поиск продуктов...",
                         color = TextHint,
                         fontSize = 14.sp
                     )
@@ -194,12 +239,12 @@ private fun FoodContent(
             ) {
                 Column {
                     Text(
-                        "\u0421\u044A\u0435\u0434\u0435\u043D\u043E \u0441\u0435\u0433\u043E\u0434\u043D\u044F",
+                        calorieLabelForDate(state.selectedDate),
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.9f)
                     )
                     Text(
-                        "${state.caloriesConsumed} \u043A\u043A\u0430\u043B",
+                        "${state.caloriesConsumed} ккал",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -216,49 +261,33 @@ private fun FoodContent(
                     .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                MacroCard(
-                    modifier = Modifier.weight(1f),
-                    name = "\u0411\u0435\u043B\u043A\u0438",
-                    value = state.proteins
-                )
-                MacroCard(
-                    modifier = Modifier.weight(1f),
-                    name = "\u0416\u0438\u0440\u044B",
-                    value = state.fats
-                )
-                MacroCard(
-                    modifier = Modifier.weight(1f),
-                    name = "\u0423\u0433\u043B\u0435\u0432\u043E\u0434\u044B",
-                    value = state.carbs
-                )
+                MacroCard(modifier = Modifier.weight(1f), name = "Белки", value = state.proteins)
+                MacroCard(modifier = Modifier.weight(1f), name = "Жиры", value = state.fats)
+                MacroCard(modifier = Modifier.weight(1f), name = "Углеводы", value = state.carbs)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Meal Sections
             MealSection(
-                title = "\u0417\u0430\u0432\u0442\u0440\u0430\u043A",
-                emoji = "\uD83C\uDF73",
-                calories = state.breakfastCalories,
-                items = state.breakfastItems
+                title = "Завтрак", emoji = "🍳",
+                calories = state.breakfastCalories, items = state.breakfastItems,
+                onDeleteItem = { index -> onDeleteItem("breakfast", index) }
             )
             MealSection(
-                title = "\u041E\u0431\u0435\u0434",
-                emoji = "\uD83C\uDF5C",
-                calories = state.lunchCalories,
-                items = state.lunchItems
+                title = "Обед", emoji = "🍜",
+                calories = state.lunchCalories, items = state.lunchItems,
+                onDeleteItem = { index -> onDeleteItem("lunch", index) }
             )
             MealSection(
-                title = "\u0423\u0436\u0438\u043D",
-                emoji = "\uD83C\uDF55",
-                calories = state.dinnerCalories,
-                items = state.dinnerItems
+                title = "Ужин", emoji = "🍕",
+                calories = state.dinnerCalories, items = state.dinnerItems,
+                onDeleteItem = { index -> onDeleteItem("dinner", index) }
             )
             MealSection(
-                title = "\u041F\u0435\u0440\u0435\u043A\u0443\u0441",
-                emoji = "\uD83C\uDF4E",
-                calories = state.snackCalories,
-                items = state.snackItems
+                title = "Перекус", emoji = "🍎",
+                calories = state.snackCalories, items = state.snackItems,
+                onDeleteItem = { index -> onDeleteItem("snack", index) }
             )
         }
 
@@ -274,20 +303,112 @@ private fun FoodContent(
             ActionButton(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.Edit,
-                text = "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C\n\u043F\u0440\u043E\u0434\u0443\u043A\u0442",
-                onClick = { viewModel.showAddDialog() }
+                text = "Добавить\nпродукт",
+                onClick = onShowAddDialog
             )
             ActionButton(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.CameraAlt,
-                text = "\u0421\u043A\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u0442\u044C\n\u0448\u0442\u0440\u0438\u0445-\u043A\u043E\u0434",
+                text = "Сканировать\nштрих-код",
                 onClick = onScanBarcode
             )
             ActionButton(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.PhotoLibrary,
-                text = "\u0424\u043E\u0442\u043E\n\u0448\u0442\u0440\u0438\u0445-\u043A\u043E\u0434\u0430",
+                text = "Фото\nштрих-кода",
                 onClick = onPickPhoto
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeekCalendar(
+    selectedDate: LocalDate,
+    onDaySelected: (LocalDate) -> Unit,
+    onPreviousWeek: () -> Unit,
+    onNextWeek: () -> Unit
+) {
+    val today = LocalDate.now()
+    val monday = selectedDate.with(DayOfWeek.MONDAY)
+    val weekDays = (0..6).map { monday.plusDays(it.toLong()) }
+    val dayNames = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+    val todayMonday = today.with(DayOfWeek.MONDAY)
+    val canGoForward = monday.isBefore(todayMonday)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = onPreviousWeek,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Text("←", fontSize = 20.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
+        }
+
+        weekDays.forEachIndexed { index, date ->
+            val isSelected = date == selectedDate
+            val isFuture = date.isAfter(today)
+            val isToday = date == today
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isSelected) Primary else Color.Transparent)
+                    .then(
+                        if (!isFuture) Modifier.clickable { onDaySelected(date) }
+                        else Modifier
+                    )
+                    .padding(vertical = 6.dp, horizontal = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = dayNames[index],
+                    fontSize = 10.sp,
+                    color = when {
+                        isSelected -> Color.White
+                        isFuture -> TextHint
+                        else -> TextSecondary
+                    }
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${date.dayOfMonth}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = when {
+                        isSelected -> Color.White
+                        isFuture -> TextHint
+                        else -> TextPrimary
+                    }
+                )
+                if (isToday && !isSelected) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(Primary)
+                    )
+                }
+            }
+        }
+
+        IconButton(
+            onClick = onNextWeek,
+            enabled = canGoForward,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Text(
+                "→",
+                fontSize = 20.sp,
+                color = if (canGoForward) TextPrimary else TextHint,
+                fontWeight = FontWeight.Bold
             )
         }
     }
@@ -309,7 +430,7 @@ private fun MacroCard(
             Text(name, fontSize = 12.sp, color = TextSecondary)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "${value}\u0433",
+                "${value}г",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Primary
@@ -323,7 +444,8 @@ private fun MealSection(
     title: String,
     emoji: String,
     calories: Int,
-    items: List<DisplayFoodItem>
+    items: List<DisplayFoodItem>,
+    onDeleteItem: (Int) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 24.dp)) {
         Row(
@@ -350,7 +472,7 @@ private fun MealSection(
                 )
             }
             Text(
-                text = "$calories \u043A\u043A\u0430\u043B",
+                text = "$calories ккал",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
@@ -369,14 +491,14 @@ private fun MealSection(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "\u041D\u0435\u0442 \u0437\u0430\u043F\u0438\u0441\u0435\u0439",
+                    "Нет записей",
                     fontSize = 14.sp,
                     color = TextHint
                 )
             }
         } else {
-            items.forEach { item ->
-                FoodItemCard(item)
+            items.forEachIndexed { index, item ->
+                FoodItemCard(item, onDelete = { onDeleteItem(index) })
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
@@ -386,23 +508,23 @@ private fun MealSection(
 }
 
 @Composable
-private fun FoodItemCard(item: DisplayFoodItem) {
+private fun FoodItemCard(item: DisplayFoodItem, onDelete: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White)
-            .padding(12.dp),
+            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(44.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(SurfaceLight),
             contentAlignment = Alignment.Center
         ) {
-            Text("\uD83C\uDF5E", fontSize = 24.sp)
+            Text("🍞", fontSize = 22.sp)
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -413,17 +535,29 @@ private fun FoodItemCard(item: DisplayFoodItem) {
                 color = TextPrimary
             )
             Text(
-                text = "\u0411: ${item.proteins}\u0433 \u2022 \u0416: ${item.fats}\u0433 \u2022 \u0423: ${item.carbs}\u0433",
+                text = "Б: ${item.proteins}г • Ж: ${item.fats}г • У: ${item.carbs}г",
                 fontSize = 11.sp,
                 color = TextHint
             )
         }
         Text(
-            text = "${item.calories} \u043A\u043A\u0430\u043B",
-            fontSize = 14.sp,
+            text = "${item.calories} ккал",
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
+        Spacer(modifier = Modifier.width(4.dp))
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Delete,
+                contentDescription = "Удалить",
+                tint = Color(0xFFEF4444),
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 
@@ -464,6 +598,8 @@ private fun ActionButton(
 
 @Composable
 private fun AddFoodDialog(
+    isAdding: Boolean,
+    addError: String?,
     onDismiss: () -> Unit,
     onAdd: (name: String, calories: Int, proteins: Int, fats: Int, carbs: Int, mealType: String) -> Unit
 ) {
@@ -473,19 +609,22 @@ private fun AddFoodDialog(
     var fats by remember { mutableStateOf("") }
     var carbs by remember { mutableStateOf("") }
     var selectedMealType by remember { mutableStateOf("breakfast") }
+    var submitAttempted by remember { mutableStateOf(false) }
+
+    val isValid = name.isNotBlank() && calories.isNotBlank() && proteins.isNotBlank() && fats.isNotBlank() && carbs.isNotBlank()
 
     val mealTypes = listOf(
-        "breakfast" to "\u0417\u0430\u0432\u0442\u0440\u0430\u043A",
-        "lunch" to "\u041E\u0431\u0435\u0434",
-        "dinner" to "\u0423\u0436\u0438\u043D",
-        "snack" to "\u041F\u0435\u0440\u0435\u043A\u0443\u0441"
+        "breakfast" to "Завтрак",
+        "lunch" to "Обед",
+        "dinner" to "Ужин",
+        "snack" to "Перекус"
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043F\u0440\u043E\u0434\u0443\u043A\u0442",
+                "Добавить продукт",
                 fontWeight = FontWeight.Bold
             )
         },
@@ -494,54 +633,67 @@ private fun AddFoodDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435") },
+                    label = { Text("Название") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    isError = submitAttempted && name.isBlank()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = calories,
                     onValueChange = { calories = it.filter { c -> c.isDigit() } },
-                    label = { Text("\u041A\u0430\u043B\u043E\u0440\u0438\u0438") },
+                    label = { Text("Калории") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    isError = submitAttempted && calories.isBlank()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = proteins,
                         onValueChange = { proteins = it.filter { c -> c.isDigit() } },
-                        label = { Text("\u0411\u0435\u043B\u043A\u0438") },
+                        label = { Text("Белки") },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        isError = submitAttempted && proteins.isBlank()
                     )
                     OutlinedTextField(
                         value = fats,
                         onValueChange = { fats = it.filter { c -> c.isDigit() } },
-                        label = { Text("\u0416\u0438\u0440\u044B") },
+                        label = { Text("Жиры") },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        isError = submitAttempted && fats.isBlank()
                     )
                     OutlinedTextField(
                         value = carbs,
                         onValueChange = { carbs = it.filter { c -> c.isDigit() } },
-                        label = { Text("\u0423\u0433\u043B\u0435\u0432.") },
+                        label = { Text("Углев.") },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        isError = submitAttempted && carbs.isBlank()
+                    )
+                }
+                if (submitAttempted && !isValid) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Заполните все поля",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    "\u041F\u0440\u0438\u0451\u043C \u043F\u0438\u0449\u0438",
+                    "Приём пищи",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextPrimary
@@ -576,24 +728,46 @@ private fun AddFoodDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val cal = calories.toIntOrNull() ?: 0
-                    val prot = proteins.toIntOrNull() ?: 0
-                    val fat = fats.toIntOrNull() ?: 0
-                    val carb = carbs.toIntOrNull() ?: 0
-                    if (name.isNotBlank()) {
-                        onAdd(name, cal, prot, fat, carb, selectedMealType)
+                    submitAttempted = true
+                    if (isValid) {
+                        onAdd(
+                            name,
+                            calories.toInt(),
+                            proteins.toInt(),
+                            fats.toInt(),
+                            carbs.toInt(),
+                            selectedMealType
+                        )
                     }
                 },
+                enabled = !isAdding,
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                shape = RoundedCornerShape(12.dp),
-                enabled = name.isNotBlank()
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C")
+                if (isAdding) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Добавить")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("\u041E\u0442\u043C\u0435\u043D\u0430", color = TextSecondary)
+            Column(horizontalAlignment = Alignment.End) {
+                if (addError != null) {
+                    Text(
+                        addError,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(end = 8.dp, bottom = 4.dp)
+                    )
+                }
+                TextButton(onClick = onDismiss, enabled = !isAdding) {
+                    Text("Отмена", color = TextSecondary)
+                }
             }
         }
     )
