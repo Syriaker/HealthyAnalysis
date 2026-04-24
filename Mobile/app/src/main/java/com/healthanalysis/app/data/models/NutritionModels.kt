@@ -26,3 +26,13 @@ data class FoodLogRequest(
     val weight: Int,
     @SerializedName("meal_type") val mealType: String
 )
+
+data class CustomProductRequest(
+    val name: String,
+    val calories: Double,
+    val proteins: Double,
+    val fats: Double,
+    val carbs: Double
+)
+
+data class CustomProductResponse(val id: Int)

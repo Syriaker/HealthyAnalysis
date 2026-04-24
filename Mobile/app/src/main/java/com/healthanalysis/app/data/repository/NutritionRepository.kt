@@ -1,6 +1,8 @@
 package com.healthanalysis.app.data.repository
 
 import com.healthanalysis.app.data.api.NutritionApi
+import com.healthanalysis.app.data.models.CustomProductRequest
+import com.healthanalysis.app.data.models.CustomProductResponse
 import com.healthanalysis.app.data.models.FoodLogRequest
 import com.healthanalysis.app.data.models.FoodLogResponse
 import com.healthanalysis.app.data.models.ProductResponse
@@ -19,6 +21,20 @@ class NutritionRepository @Inject constructor(
                     ?: Result.failure(Exception("Product not found"))
             } else {
                 Result.failure(Exception("Error: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createCustomProduct(request: CustomProductRequest): Result<CustomProductResponse> {
+        return try {
+            val response = nutritionApi.createCustomProduct(request)
+            if (response.isSuccessful) {
+                response.body()?.let { Result.success(it) }
+                    ?: Result.failure(Exception("Пустой ответ сервера"))
+            } else {
+                Result.failure(Exception("Ошибка ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)

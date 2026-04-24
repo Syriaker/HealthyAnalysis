@@ -136,6 +136,8 @@ fun FoodScreen(
 
     if (state.showAddDialog) {
         AddFoodDialog(
+            isAdding = state.isAddingFood,
+            addError = state.addError,
             onDismiss = { viewModel.hideAddDialog() },
             onAdd = { name, cal, prot, fat, carb, meal ->
                 viewModel.addManualEntry(name, cal, prot, fat, carb, meal)
@@ -596,6 +598,8 @@ private fun ActionButton(
 
 @Composable
 private fun AddFoodDialog(
+    isAdding: Boolean,
+    addError: String?,
     onDismiss: () -> Unit,
     onAdd: (name: String, calories: Int, proteins: Int, fats: Int, carbs: Int, mealType: String) -> Unit
 ) {
@@ -736,15 +740,34 @@ private fun AddFoodDialog(
                         )
                     }
                 },
+                enabled = !isAdding,
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Добавить")
+                if (isAdding) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Добавить")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Отмена", color = TextSecondary)
+            Column(horizontalAlignment = Alignment.End) {
+                if (addError != null) {
+                    Text(
+                        addError,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(end = 8.dp, bottom = 4.dp)
+                    )
+                }
+                TextButton(onClick = onDismiss, enabled = !isAdding) {
+                    Text("Отмена", color = TextSecondary)
+                }
             }
         }
     )

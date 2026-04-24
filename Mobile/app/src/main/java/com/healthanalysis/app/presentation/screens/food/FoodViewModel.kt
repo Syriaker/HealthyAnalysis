@@ -2,6 +2,8 @@ package com.healthanalysis.app.presentation.screens.food
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.healthanalysis.app.data.models.CustomProductRequest
+import com.healthanalysis.app.data.models.FoodLogRequest
 import com.healthanalysis.app.data.repository.NutritionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +34,9 @@ data class FoodUiState(
     val searchQuery: String = "",
     val selectedDate: LocalDate = LocalDate.now(),
     val foodByDate: Map<String, DayFoodData> = emptyMap(),
-    val showAddDialog: Boolean = false
+    val showAddDialog: Boolean = false,
+    val isAddingFood: Boolean = false,
+    val addError: String? = null
 ) {
     private val selectedDay: DayFoodData get() = foodByDate[selectedDate.toString()] ?: DayFoodData()
 
@@ -125,11 +129,11 @@ class FoodViewModel @Inject constructor(
     }
 
     fun showAddDialog() {
-        _uiState.value = _uiState.value.copy(showAddDialog = true)
+        _uiState.value = _uiState.value.copy(showAddDialog = true, addError = null)
     }
 
     fun hideAddDialog() {
-        _uiState.value = _uiState.value.copy(showAddDialog = false)
+        _uiState.value = _uiState.value.copy(showAddDialog = false, addError = null, isAddingFood = false)
     }
 
     fun selectDay(date: LocalDate) {
@@ -160,8 +164,10 @@ class FoodViewModel @Inject constructor(
         }
     }
 
-    // Ручное добавление — хранится локально (бэкенд требует product_id,
-    // доступный только после сканирования штрих-кода).
+    // Шаг 1: POST /nutrition/products/custom/ → получаем product_id.
+    // Шаг 2: POST /nutrition/log/ с product_id и weight=100
+    //   (вес 100 г означает, что nutrition-значения совпадают с введёнными пользователем).
+    // Продукт добавляется на экран только после успешного ответа 201 от сервера.
     fun addManualEntry(
         name: String,
         calories: Int,
@@ -170,22 +176,55 @@ class FoodViewModel @Inject constructor(
         carbs: Int,
         mealType: String
     ) {
-        val current = _uiState.value
-        val dateKey = current.selectedDate.toString()
-        val currentDay = current.foodByDate[dateKey] ?: DayFoodData()
-        val entry = DisplayFoodItem(name, calories, proteins, fats, carbs)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isAddingFood = true, addError = null)
 
-        val updatedDay = when (mealType) {
-            "breakfast" -> currentDay.copy(breakfastItems = currentDay.breakfastItems + entry)
-            "lunch" -> currentDay.copy(lunchItems = currentDay.lunchItems + entry)
-            "dinner" -> currentDay.copy(dinnerItems = currentDay.dinnerItems + entry)
-            else -> currentDay.copy(snackItems = currentDay.snackItems + entry)
+            val productResult = nutritionRepository.createCustomProduct(
+                CustomProductRequest(
+                    name = name,
+                    calories = calories.toDouble(),
+                    proteins = proteins.toDouble(),
+                    fats = fats.toDouble(),
+                    carbs = carbs.toDouble()
+                )
+            )
+
+            if (productResult.isFailure) {
+                _uiState.value = _uiState.value.copy(
+                    isAddingFood = false,
+                    addError = productResult.exceptionOrNull()?.message ?: "Не удалось создать продукт"
+                )
+                return@launch
+            }
+
+            val productId = productResult.getOrNull()?.id ?: run {
+                _uiState.value = _uiState.value.copy(
+                    isAddingFood = false,
+                    addError = "Сервер не вернул ID продукта"
+                )
+                return@launch
+            }
+
+            val logResult = nutritionRepository.logFood(
+                FoodLogRequest(productId = productId, weight = 100, mealType = mealType)
+            )
+
+            logResult.onSuccess {
+                _uiState.value = _uiState.value.copy(
+                    isAddingFood = false,
+                    addError = null,
+                    showAddDialog = false
+                )
+                loadData()
+            }
+
+            logResult.onFailure { e ->
+                _uiState.value = _uiState.value.copy(
+                    isAddingFood = false,
+                    addError = e.message ?: "Не удалось добавить в дневник"
+                )
+            }
         }
-
-        _uiState.value = current.copy(
-            foodByDate = current.foodByDate + (dateKey to updatedDay),
-            showAddDialog = false
-        )
     }
 
     fun removeEntry(mealType: String, index: Int) {
