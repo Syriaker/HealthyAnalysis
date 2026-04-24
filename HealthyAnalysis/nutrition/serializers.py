@@ -6,6 +6,11 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields =['id', 'barcode', 'name', 'calories', 'proteins', 'fats', 'carbs', 'image_url']
 
+class CustomProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields =['id', 'name', 'calories', 'proteins', 'fats', 'carbs']
+
 class FoodLogSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(

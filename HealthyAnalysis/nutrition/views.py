@@ -4,7 +4,7 @@ from rest_framework import generics, permissions
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import Product, FoodLog
-from .serializers import ProductSerializer, FoodLogSerializer
+from .serializers import ProductSerializer, FoodLogSerializer, CustomProductSerializer
 from django.utils import timezone
 
 class ScanProductView(APIView):
@@ -86,3 +86,14 @@ class FoodLogView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+class CustomProductCreateView(generics.CreateAPIView):
+    serializer_class = CustomProductSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Создать свой продукт (ручной ввод)",
+        description="Создает продукт без штрих-кода и возвращает его ID для добавления в дневник."
+    )
+    def perform_create(self, serializer):
+        serializer.save()

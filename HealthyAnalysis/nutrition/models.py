@@ -3,7 +3,7 @@ from django.conf import settings
 
 
 class Product(models.Model):
-    barcode = models.CharField("Штрих-код", max_length=100, unique=True, db_index=True)
+    barcode = models.CharField("Штрих-код", max_length=100, unique=True, null=True, blank=True, db_index=True)
     name = models.CharField("Название", max_length=255)
 
     calories = models.FloatField("Ккал (на 100г)", default=0)
@@ -14,7 +14,7 @@ class Product(models.Model):
     image_url = models.URLField("Ссылка на картинку", blank=True, null=True)
 
     def __str__(self):
-        return f"{self.name} ({self.barcode})"
+        return f"{self.name} ({self.barcode or 'Ручной ввод'})"
 
 
 class FoodLog(models.Model):
