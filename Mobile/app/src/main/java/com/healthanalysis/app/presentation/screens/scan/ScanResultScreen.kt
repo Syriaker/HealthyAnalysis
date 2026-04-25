@@ -264,7 +264,7 @@ private fun ProductContent(
                 .padding(horizontal = 24.dp)
                 .height(56.dp),
             enabled = !state.isLogging && (state.weight.toIntOrNull() ?: 0) > 0,
-            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+            colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = Color.White),
             shape = RoundedCornerShape(16.dp)
         ) {
             if (state.isLogging) {
@@ -276,7 +276,7 @@ private fun ProductContent(
             } else {
                 Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Добавить в дневник", fontWeight = FontWeight.Bold)
+                Text("Добавить в дневник", fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
 

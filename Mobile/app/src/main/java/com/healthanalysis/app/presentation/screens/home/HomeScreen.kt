@@ -219,9 +219,9 @@ private fun HomeContent(
                         onClick = { onAddWater(250) },
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = Color.White)
                     ) {
-                        Text("+250 мл", fontSize = 13.sp)
+                        Text("+250 мл", fontSize = 13.sp, color = Color.White)
                     }
                 }
             }
@@ -404,9 +404,9 @@ private fun WaterHistoryDialog(
                     Button(
                         onClick = { onAddWater(250) },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = Color.White)
                     ) {
-                        Text("+250 мл")
+                        Text("+250 мл", color = Color.White)
                     }
                 }
             }
