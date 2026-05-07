@@ -87,16 +87,33 @@ class FoodLogView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-class CustomProductCreateView(generics.CreateAPIView):
-    serializer_class = CustomProductSerializer
+class GlobalDishSearchView(generics.ListAPIView):
+    serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        summary="Создать свой продукт (ручной ввод)",
-        description="Создает продукт без штрих-кода и возвращает его ID для добавления в дневник."
+        summary="Поиск по глобальной библиотеке блюд",
+        parameters=[OpenApiParameter(name='q', description='Название блюда (например: борщ)', required=True, type=str)]
+    )
+    def get_queryset(self):
+        query = self.request.query_params.get('q', '')
+
+        if query:
+            return Product.objects.filter(is_global_dish=True, name__icontains=query).order_by('-id')[
+                   :30]
+        return Product.objects.filter(is_global_dish=True).order_by('-id')[:30]
+
+class CustomProductCreateView(generics.CreateAPIView):
+    serializer_class = CustomProductSerializer
+    permission_classes =[permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Создать блюдо (в т.ч. в глобальную базу)",
+        description="Создает продукт. Если is_global_dish=true, он станет доступен всем для поиска."
     )
     def perform_create(self, serializer):
-        serializer.save()
+        serializer.save(creator=self.request.user)
+
 
 class FoodLogDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = FoodLogSerializer

@@ -13,8 +13,19 @@ class Product(models.Model):
 
     image_url = models.URLField("Ссылка на картинку", blank=True, null=True)
 
+    is_global_dish = models.BooleanField("В глобальной библиотеке", default=False)
+    creator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_dishes',
+        help_text="Кто добавил это блюдо (null = администратор)"
+    )
+
     def __str__(self):
-        return f"{self.name} ({self.barcode or 'Ручной ввод'})"
+        return f"{self.name} ({self.barcode or 'Блюдо'})"
+
+
 
 
 class FoodLog(models.Model):

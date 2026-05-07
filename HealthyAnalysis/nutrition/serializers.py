@@ -9,7 +9,7 @@ class ProductSerializer(serializers.ModelSerializer):
 class CustomProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields =['id', 'name', 'calories', 'proteins', 'fats', 'carbs']
+        fields =['id', 'name', 'calories', 'proteins', 'fats', 'carbs', 'is_global_dish']
 
 class DailyWaterSerializer(serializers.ModelSerializer):
     class Meta:
