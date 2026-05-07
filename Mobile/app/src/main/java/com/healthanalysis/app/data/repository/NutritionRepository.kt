@@ -6,6 +6,8 @@ import com.healthanalysis.app.data.models.CustomProductResponse
 import com.healthanalysis.app.data.models.FoodLogRequest
 import com.healthanalysis.app.data.models.FoodLogResponse
 import com.healthanalysis.app.data.models.ProductResponse
+import com.healthanalysis.app.data.models.WaterAmountRequest
+import com.healthanalysis.app.data.models.WaterResponse
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -73,6 +75,32 @@ class NutritionRepository @Inject constructor(
             val response = nutritionApi.getFoodLogs(date)
             if (response.isSuccessful) {
                 Result.success(response.body() ?: emptyList())
+            } else {
+                Result.failure(Exception("Error: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getWater(date: String): Result<WaterResponse> {
+        return try {
+            val response = nutritionApi.getWater(date)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: WaterResponse(date, 0))
+            } else {
+                Result.failure(Exception("Error: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addWater(amount: Int, date: String): Result<WaterResponse> {
+        return try {
+            val response = nutritionApi.addWater(WaterAmountRequest(amount, date))
+            if (response.isSuccessful) {
+                Result.success(response.body()!!)
             } else {
                 Result.failure(Exception("Error: ${response.code()}"))
             }

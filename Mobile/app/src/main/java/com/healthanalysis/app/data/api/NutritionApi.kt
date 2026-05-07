@@ -5,10 +5,13 @@ import com.healthanalysis.app.data.models.CustomProductResponse
 import com.healthanalysis.app.data.models.FoodLogRequest
 import com.healthanalysis.app.data.models.FoodLogResponse
 import com.healthanalysis.app.data.models.ProductResponse
+import com.healthanalysis.app.data.models.WaterAmountRequest
+import com.healthanalysis.app.data.models.WaterResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -29,4 +32,13 @@ interface NutritionApi {
 
     @DELETE("nutrition/log/{id}/")
     suspend fun deleteLog(@Path("id") id: Int): Response<Unit>
+
+    @GET("nutrition/water/")
+    suspend fun getWater(@Query("date") date: String? = null): Response<WaterResponse>
+
+    @POST("nutrition/water/")
+    suspend fun addWater(@Body request: WaterAmountRequest): Response<WaterResponse>
+
+    @PATCH("nutrition/water/")
+    suspend fun setWater(@Body request: WaterAmountRequest): Response<WaterResponse>
 }

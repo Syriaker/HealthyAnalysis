@@ -759,7 +759,7 @@ private fun AddFoodDialog(
                     }
                 },
                 enabled = !isAdding,
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = Color.White),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isAdding) {
@@ -769,7 +769,7 @@ private fun AddFoodDialog(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Добавить")
+                    Text("Добавить", color = Color.White)
                 }
             }
         },

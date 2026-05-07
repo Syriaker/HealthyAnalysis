@@ -1,6 +1,7 @@
 package com.healthanalysis.app.data.repository
 
 import com.healthanalysis.app.data.api.ProfileApi
+import com.healthanalysis.app.data.api.httpErrorMessage
 import com.healthanalysis.app.data.models.ProfileResponse
 import com.healthanalysis.app.data.models.ProfileUpdateRequest
 import javax.inject.Inject
@@ -17,7 +18,7 @@ class ProfileRepository @Inject constructor(
                 response.body()?.let { Result.success(it) }
                     ?: Result.failure(Exception("Empty response"))
             } else {
-                Result.failure(Exception("Error: ${response.code()}"))
+                Result.failure(Exception(httpErrorMessage(response.code())))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -31,7 +32,7 @@ class ProfileRepository @Inject constructor(
                 response.body()?.let { Result.success(it) }
                     ?: Result.failure(Exception("Empty response"))
             } else {
-                Result.failure(Exception("Error: ${response.code()}"))
+                Result.failure(Exception(httpErrorMessage(response.code())))
             }
         } catch (e: Exception) {
             Result.failure(e)

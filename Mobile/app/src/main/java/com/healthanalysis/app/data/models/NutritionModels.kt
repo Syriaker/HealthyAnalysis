@@ -36,3 +36,6 @@ data class CustomProductRequest(
 )
 
 data class CustomProductResponse(val id: Int)
+
+data class WaterResponse(val date: String, val amount: Int)
+data class WaterAmountRequest(val amount: Int, val date: String)
