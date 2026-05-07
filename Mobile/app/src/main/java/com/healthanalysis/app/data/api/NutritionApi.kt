@@ -41,4 +41,7 @@ interface NutritionApi {
 
     @PATCH("nutrition/water/")
     suspend fun setWater(@Body request: WaterAmountRequest): Response<WaterResponse>
+
+    @GET("nutrition/dishes/search/")
+    suspend fun searchDishes(@Query("q") query: String): Response<List<ProductResponse>>
 }
