@@ -32,7 +32,8 @@ data class CustomProductRequest(
     val calories: Double,
     val proteins: Double,
     val fats: Double,
-    val carbs: Double
+    val carbs: Double,
+    @SerializedName("is_global_dish") val isGlobalDish: Boolean = false
 )
 
 data class CustomProductResponse(val id: Int)

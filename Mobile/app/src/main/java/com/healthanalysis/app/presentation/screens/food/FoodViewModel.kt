@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthanalysis.app.data.models.CustomProductRequest
 import com.healthanalysis.app.data.models.FoodLogRequest
+import com.healthanalysis.app.data.models.ProductResponse
 import com.healthanalysis.app.data.repository.NutritionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +39,11 @@ data class FoodUiState(
     val showAddDialog: Boolean = false,
     val isAddingFood: Boolean = false,
     val addError: String? = null,
-    val deletingLogIds: Set<Int> = emptySet()
+    val deletingLogIds: Set<Int> = emptySet(),
+    val dishSearchQuery: String = "",
+    val dishSearchResults: List<ProductResponse> = emptyList(),
+    val isDishSearching: Boolean = false,
+    val dishSearchError: String? = null
 ) {
     private val selectedDay: DayFoodData get() = foodByDate[selectedDate.toString()] ?: DayFoodData()
 
@@ -131,10 +136,50 @@ class FoodViewModel @Inject constructor(
 
     fun showAddDialog() {
         _uiState.value = _uiState.value.copy(showAddDialog = true, addError = null)
+        searchDishes("")
     }
 
     fun hideAddDialog() {
-        _uiState.value = _uiState.value.copy(showAddDialog = false, addError = null, isAddingFood = false)
+        _uiState.value = _uiState.value.copy(
+            showAddDialog = false,
+            addError = null,
+            isAddingFood = false,
+            dishSearchQuery = "",
+            dishSearchResults = emptyList(),
+            isDishSearching = false,
+            dishSearchError = null
+        )
+    }
+
+    fun searchDishes(query: String) {
+        _uiState.value = _uiState.value.copy(dishSearchQuery = query)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isDishSearching = true, dishSearchError = null)
+            nutritionRepository.searchDishes(query)
+                .onSuccess { results ->
+                    _uiState.value = _uiState.value.copy(dishSearchResults = results, isDishSearching = false)
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(isDishSearching = false, dishSearchError = e.message)
+                }
+        }
+    }
+
+    fun logExistingProduct(productId: Int, weight: Int, mealType: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isAddingFood = true, addError = null)
+            nutritionRepository.logFood(FoodLogRequest(productId = productId, weight = weight, mealType = mealType))
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(isAddingFood = false, showAddDialog = false)
+                    loadData()
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isAddingFood = false,
+                        addError = e.message ?: "Не удалось добавить в дневник"
+                    )
+                }
+        }
     }
 
     fun selectDay(date: LocalDate) {
@@ -167,10 +212,12 @@ class FoodViewModel @Inject constructor(
 
     fun addManualEntry(
         name: String,
-        calories: Int,
-        proteins: Int,
-        fats: Int,
-        carbs: Int,
+        caloriesPer100g: Int,
+        proteinsPer100g: Int,
+        fatsPer100g: Int,
+        carbsPer100g: Int,
+        weightGrams: Int,
+        isGlobalDish: Boolean,
         mealType: String
     ) {
         viewModelScope.launch {
@@ -179,10 +226,11 @@ class FoodViewModel @Inject constructor(
             val productResult = nutritionRepository.createCustomProduct(
                 CustomProductRequest(
                     name = name,
-                    calories = calories.toDouble(),
-                    proteins = proteins.toDouble(),
-                    fats = fats.toDouble(),
-                    carbs = carbs.toDouble()
+                    calories = caloriesPer100g.toDouble(),
+                    proteins = proteinsPer100g.toDouble(),
+                    fats = fatsPer100g.toDouble(),
+                    carbs = carbsPer100g.toDouble(),
+                    isGlobalDish = isGlobalDish
                 )
             )
 
@@ -203,7 +251,7 @@ class FoodViewModel @Inject constructor(
             }
 
             val logResult = nutritionRepository.logFood(
-                FoodLogRequest(productId = productId, weight = 100, mealType = mealType)
+                FoodLogRequest(productId = productId, weight = weightGrams, mealType = mealType)
             )
 
             logResult.onSuccess {

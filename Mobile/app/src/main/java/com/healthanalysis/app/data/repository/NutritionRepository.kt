@@ -108,4 +108,17 @@ class NutritionRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun searchDishes(query: String): Result<List<ProductResponse>> {
+        return try {
+            val response = nutritionApi.searchDishes(query)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: emptyList())
+            } else {
+                Result.failure(Exception("Error: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

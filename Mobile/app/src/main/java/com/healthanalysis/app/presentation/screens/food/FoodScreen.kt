@@ -9,12 +9,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -33,12 +36,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.common.HybridBinarizer
+import com.healthanalysis.app.data.models.ProductResponse
 import com.healthanalysis.app.presentation.components.ErrorScreen
 import com.healthanalysis.app.presentation.components.LoadingScreen
 import com.healthanalysis.app.presentation.theme.*
@@ -138,9 +143,16 @@ fun FoodScreen(
         AddFoodDialog(
             isAdding = state.isAddingFood,
             addError = state.addError,
+            dishSearchQuery = state.dishSearchQuery,
+            dishSearchResults = state.dishSearchResults,
+            isDishSearching = state.isDishSearching,
             onDismiss = { viewModel.hideAddDialog() },
-            onAdd = { name, cal, prot, fat, carb, meal ->
-                viewModel.addManualEntry(name, cal, prot, fat, carb, meal)
+            onSearchDishes = { viewModel.searchDishes(it) },
+            onAdd = { name, cal, prot, fat, carb, weight, isGlobal, meal ->
+                viewModel.addManualEntry(name, cal, prot, fat, carb, weight, isGlobal, meal)
+            },
+            onLogExisting = { productId, weight, mealType ->
+                viewModel.logExistingProduct(productId, weight, mealType)
             }
         )
     }
@@ -614,179 +626,361 @@ private fun ActionButton(
     }
 }
 
+private enum class AddDialogMode { SEARCH, MANUAL, LOG_EXISTING }
+
 @Composable
 private fun AddFoodDialog(
     isAdding: Boolean,
     addError: String?,
+    dishSearchQuery: String,
+    dishSearchResults: List<ProductResponse>,
+    isDishSearching: Boolean,
     onDismiss: () -> Unit,
-    onAdd: (name: String, calories: Int, proteins: Int, fats: Int, carbs: Int, mealType: String) -> Unit
+    onSearchDishes: (String) -> Unit,
+    onAdd: (name: String, caloriesPer100g: Int, proteinsPer100g: Int, fatsPer100g: Int, carbsPer100g: Int, weightGrams: Int, isGlobalDish: Boolean, mealType: String) -> Unit,
+    onLogExisting: (productId: Int, weight: Int, mealType: String) -> Unit
 ) {
+    var mode by remember { mutableStateOf(AddDialogMode.SEARCH) }
+    var selectedProduct by remember { mutableStateOf<ProductResponse?>(null) }
+
+    // manual entry state
     var name by remember { mutableStateOf("") }
     var calories by remember { mutableStateOf("") }
     var proteins by remember { mutableStateOf("") }
     var fats by remember { mutableStateOf("") }
     var carbs by remember { mutableStateOf("") }
+    var weightGrams by remember { mutableStateOf("100") }
+    var isGlobalDish by remember { mutableStateOf(false) }
     var selectedMealType by remember { mutableStateOf("breakfast") }
     var submitAttempted by remember { mutableStateOf(false) }
 
-    val isValid = name.isNotBlank() && calories.isNotBlank() && proteins.isNotBlank() && fats.isNotBlank() && carbs.isNotBlank()
+    // weight for log-existing mode
+    var existingWeight by remember { mutableStateOf("100") }
 
-    val mealTypes = listOf(
-        "breakfast" to "Завтрак",
-        "lunch" to "Обед",
-        "dinner" to "Ужин",
-        "snack" to "Перекус"
-    )
+    val mealTypes = listOf("breakfast" to "Завтрак", "lunch" to "Обед", "dinner" to "Ужин", "snack" to "Перекус")
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                "Добавить продукт",
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Название") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    isError = submitAttempted && name.isBlank()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = calories,
-                    onValueChange = { calories = it.filter { c -> c.isDigit() } },
-                    label = { Text("Калории") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    isError = submitAttempted && calories.isBlank()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = proteins,
-                        onValueChange = { proteins = it.filter { c -> c.isDigit() } },
-                        label = { Text("Белки") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        isError = submitAttempted && proteins.isBlank()
-                    )
-                    OutlinedTextField(
-                        value = fats,
-                        onValueChange = { fats = it.filter { c -> c.isDigit() } },
-                        label = { Text("Жиры") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        isError = submitAttempted && fats.isBlank()
-                    )
-                    OutlinedTextField(
-                        value = carbs,
-                        onValueChange = { carbs = it.filter { c -> c.isDigit() } },
-                        label = { Text("Углев.") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        isError = submitAttempted && carbs.isBlank()
-                    )
-                }
-                if (submitAttempted && !isValid) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Заполните все поля",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    "Приём пищи",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    mealTypes.forEach { (key, label) ->
-                        val selected = selectedMealType == key
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = Background
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                when (mode) {
+                    AddDialogMode.SEARCH -> {
+                        Text("Добавить еду", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = dishSearchQuery,
+                            onValueChange = onSearchDishes,
+                            label = { Text("Поиск блюда") },
+                            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, tint = TextHint) },
+                            trailingIcon = { if (isDishSearching) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Primary) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (dishSearchResults.isEmpty() && !isDishSearching) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    if (dishSearchQuery.isEmpty()) "Введите название для поиска" else "Ничего не найдено",
+                                    fontSize = 13.sp, color = TextHint
+                                )
+                            }
+                        } else {
+                            LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
+                                items(dishSearchResults) { dish ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color.White)
+                                            .clickable {
+                                                selectedProduct = dish
+                                                existingWeight = "100"
+                                                mode = AddDialogMode.LOG_EXISTING
+                                            }
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(dish.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                            Text(
+                                                "Б: ${dish.proteins.toInt()}г • Ж: ${dish.fats.toInt()}г • У: ${dish.carbs.toInt()}г (на 100г)",
+                                                fontSize = 11.sp, color = TextHint
+                                            )
+                                        }
+                                        Text("${dish.calories.toInt()} ккал", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Primary)
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = Surface)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { mode = AddDialogMode.MANUAL },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text("Добавить вручную", color = Color.White) }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                            Text("Отмена", color = TextSecondary)
+                        }
+                    }
+
+                    AddDialogMode.LOG_EXISTING -> {
+                        val dish = selectedProduct ?: return@Column
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { mode = AddDialogMode.SEARCH }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Outlined.ArrowBack, contentDescription = "Назад", tint = TextSecondary)
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(dish.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (selected) Primary else Surface)
-                                .clickable { selectedMealType = key }
-                                .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Surface)
+                                .padding(12.dp)
                         ) {
                             Text(
-                                label,
-                                fontSize = 11.sp,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selected) Color.White else TextSecondary
+                                "На 100г: ${dish.calories.toInt()} ккал • Б: ${dish.proteins.toInt()}г • Ж: ${dish.fats.toInt()}г • У: ${dish.carbs.toInt()}г",
+                                fontSize = 12.sp, color = TextSecondary
                             )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = existingWeight,
+                            onValueChange = { existingWeight = it.filter { c -> c.isDigit() } },
+                            label = { Text("Граммовка (г)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        val w = existingWeight.toIntOrNull() ?: 0
+                        if (w > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Primary.copy(alpha = 0.08f))
+                                    .padding(10.dp)
+                            ) {
+                                val mult = w / 100.0
+                                Text(
+                                    "Итого: ${(dish.calories * mult).toInt()} ккал • Б: ${(dish.proteins * mult).toInt()}г • Ж: ${(dish.fats * mult).toInt()}г • У: ${(dish.carbs * mult).toInt()}г",
+                                    fontSize = 12.sp, color = Primary, fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        MealTypePicker(selectedMealType, mealTypes) { selectedMealType = it }
+                        if (addError != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(addError, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { if (w > 0) onLogExisting(dish.id, w, selectedMealType) },
+                            enabled = !isAdding && w > 0,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isAdding) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            else Text("Добавить", color = Color.White)
+                        }
+                    }
+
+                    AddDialogMode.MANUAL -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { mode = AddDialogMode.SEARCH }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Outlined.ArrowBack, contentDescription = "Назад", tint = TextSecondary)
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Добавить вручную", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            label = { Text("Название блюда") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            isError = submitAttempted && name.isBlank()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = weightGrams,
+                            onValueChange = { weightGrams = it.filter { c -> c.isDigit() } },
+                            label = { Text("Граммовка (г)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            isError = submitAttempted && weightGrams.isBlank()
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("КБЖУ на 100г", fontSize = 12.sp, color = TextSecondary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = calories,
+                            onValueChange = { calories = it.filter { c -> c.isDigit() } },
+                            label = { Text("Калории") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            isError = submitAttempted && calories.isBlank()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = proteins,
+                                onValueChange = { proteins = it.filter { c -> c.isDigit() } },
+                                label = { Text("Белки") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                isError = submitAttempted && proteins.isBlank()
+                            )
+                            OutlinedTextField(
+                                value = fats,
+                                onValueChange = { fats = it.filter { c -> c.isDigit() } },
+                                label = { Text("Жиры") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                isError = submitAttempted && fats.isBlank()
+                            )
+                            OutlinedTextField(
+                                value = carbs,
+                                onValueChange = { carbs = it.filter { c -> c.isDigit() } },
+                                label = { Text("Углев.") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                isError = submitAttempted && carbs.isBlank()
+                            )
+                        }
+                        val w = weightGrams.toIntOrNull() ?: 0
+                        val cal = calories.toIntOrNull() ?: 0
+                        val prot = proteins.toIntOrNull() ?: 0
+                        val fat = fats.toIntOrNull() ?: 0
+                        val carb = carbs.toIntOrNull() ?: 0
+                        if (w > 0 && cal > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val mult = w / 100.0
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Primary.copy(alpha = 0.08f))
+                                    .padding(10.dp)
+                            ) {
+                                Text(
+                                    "Итого: ${(cal * mult).toInt()} ккал • Б: ${(prot * mult).toInt()}г • Ж: ${(fat * mult).toInt()}г • У: ${(carb * mult).toInt()}г",
+                                    fontSize = 12.sp, color = Primary, fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White)
+                                .clickable { isGlobalDish = !isGlobalDish }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Checkbox(
+                                checked = isGlobalDish,
+                                onCheckedChange = { isGlobalDish = it },
+                                colors = CheckboxDefaults.colors(checkedColor = Primary)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Column {
+                                Text("Добавить в глобальную базу", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+                                Text("Блюдо станет доступно для поиска всем пользователям", fontSize = 11.sp, color = TextHint)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        MealTypePicker(selectedMealType, mealTypes) { selectedMealType = it }
+                        val isValid = name.isNotBlank() && calories.isNotBlank() && proteins.isNotBlank() && fats.isNotBlank() && carbs.isNotBlank() && weightGrams.isNotBlank()
+                        if (submitAttempted && !isValid) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Заполните все поля", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                        }
+                        if (addError != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(addError, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                submitAttempted = true
+                                if (isValid) {
+                                    onAdd(name, cal, prot, fat, carb, w, isGlobalDish, selectedMealType)
+                                }
+                            },
+                            enabled = !isAdding,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isAdding) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            else Text("Добавить", color = Color.White)
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    submitAttempted = true
-                    if (isValid) {
-                        onAdd(
-                            name,
-                            calories.toInt(),
-                            proteins.toInt(),
-                            fats.toInt(),
-                            carbs.toInt(),
-                            selectedMealType
-                        )
-                    }
-                },
-                enabled = !isAdding,
-                colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = Color.White),
-                shape = RoundedCornerShape(12.dp)
+        }
+    }
+}
+
+@Composable
+private fun MealTypePicker(
+    selectedMealType: String,
+    mealTypes: List<Pair<String, String>>,
+    onSelect: (String) -> Unit
+) {
+    Text("Приём пищи", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+    Spacer(modifier = Modifier.height(6.dp))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        mealTypes.forEach { (key, label) ->
+            val selected = selectedMealType == key
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) Primary else Surface)
+                    .clickable { onSelect(key) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                if (isAdding) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Добавить", color = Color.White)
-                }
-            }
-        },
-        dismissButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                if (addError != null) {
-                    Text(
-                        addError,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(end = 8.dp, bottom = 4.dp)
-                    )
-                }
-                TextButton(onClick = onDismiss, enabled = !isAdding) {
-                    Text("Отмена", color = TextSecondary)
-                }
+                Text(label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) Color.White else TextSecondary)
             }
         }
-    )
+    }
 }
