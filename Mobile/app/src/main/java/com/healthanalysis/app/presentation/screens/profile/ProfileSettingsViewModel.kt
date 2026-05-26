@@ -46,7 +46,7 @@ class ProfileSettingsViewModel @Inject constructor(
                         isLoading = false,
                         height = profile.height?.toString() ?: "",
                         weight = profile.weight?.let { "%.1f".format(it) } ?: "",
-                        birthDate = profile.birthDate ?: "",
+                        birthDate = profile.birthDate?.let { isoToDisplay(it) } ?: "",
                         gender = normalizeGender(profile.gender)
                     )
                 }
@@ -68,7 +68,14 @@ class ProfileSettingsViewModel @Inject constructor(
     }
 
     fun onBirthDateChanged(value: String) {
-        _uiState.value = _uiState.value.copy(birthDate = value)
+        val digits = value.filter { it.isDigit() }.take(8)
+        val formatted = buildString {
+            digits.forEachIndexed { i, c ->
+                if (i == 2 || i == 4) append('.')
+                append(c)
+            }
+        }
+        _uiState.value = _uiState.value.copy(birthDate = formatted)
     }
 
     fun onGenderChanged(value: String) {
@@ -81,6 +88,17 @@ class ProfileSettingsViewModel @Inject constructor(
         else -> ""
     }
 
+    private fun isoToDisplay(iso: String): String {
+        val parts = iso.split("-")
+        return if (parts.size == 3) "${parts[2]}.${parts[1]}.${parts[0]}" else ""
+    }
+
+    private fun displayToIso(display: String): String? {
+        val digits = display.filter { it.isDigit() }
+        if (digits.length != 8) return null
+        return "${digits.substring(4, 8)}-${digits.substring(2, 4)}-${digits.substring(0, 2)}"
+    }
+
     fun save() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSaving = true, saveError = null)
@@ -88,7 +106,7 @@ class ProfileSettingsViewModel @Inject constructor(
             val request = ProfileUpdateRequest(
                 height = state.height.toIntOrNull(),
                 weight = state.weight.toDoubleOrNull(),
-                birthDate = state.birthDate.ifBlank { null },
+                birthDate = if (state.birthDate.isBlank()) null else displayToIso(state.birthDate),
                 gender = state.gender.ifBlank { null }
             )
             profileRepository.updateProfile(request)

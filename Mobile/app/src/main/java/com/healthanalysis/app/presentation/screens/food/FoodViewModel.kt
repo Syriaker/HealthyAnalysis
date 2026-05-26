@@ -168,7 +168,8 @@ class FoodViewModel @Inject constructor(
     fun logExistingProduct(productId: Int, weight: Int, mealType: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isAddingFood = true, addError = null)
-            nutritionRepository.logFood(FoodLogRequest(productId = productId, weight = weight, mealType = mealType))
+            val date = _uiState.value.selectedDate.toString()
+            nutritionRepository.logFood(FoodLogRequest(productId = productId, weight = weight, mealType = mealType, date = date))
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isAddingFood = false, showAddDialog = false)
                     loadData()
@@ -251,7 +252,7 @@ class FoodViewModel @Inject constructor(
             }
 
             val logResult = nutritionRepository.logFood(
-                FoodLogRequest(productId = productId, weight = weightGrams, mealType = mealType)
+                FoodLogRequest(productId = productId, weight = weightGrams, mealType = mealType, date = _uiState.value.selectedDate.toString())
             )
 
             logResult.onSuccess {

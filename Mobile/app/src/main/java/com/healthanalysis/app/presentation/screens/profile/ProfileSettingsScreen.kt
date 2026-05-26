@@ -131,7 +131,7 @@ private fun SettingsContent(
 
             // Birth date
             Text(
-                "\u0414\u0430\u0442\u0430 \u0440\u043E\u0436\u0434\u0435\u043D\u0438\u044F (\u0413\u0413\u0413\u0413-\u041C\u041C-\u0414\u0414)",
+                "\u0414\u0430\u0442\u0430 \u0440\u043E\u0436\u0434\u0435\u043D\u0438\u044F (\u0414\u0414.\u041C\u041C.\u0413\u0413\u0413\u0413)",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = TextPrimary
@@ -141,7 +141,8 @@ private fun SettingsContent(
                 value = state.birthDate,
                 onValueChange = { viewModel.onBirthDateChanged(it) },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("2000-01-15", color = TextHint) },
+                placeholder = { Text("01.01.2000", color = TextHint) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Primary,
@@ -207,7 +208,8 @@ private fun SettingsContent(
                     Text(
                         "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
+                        color = Color.White
                     )
                 }
             }
