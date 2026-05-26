@@ -16,12 +16,15 @@ class DailyWaterSerializer(serializers.ModelSerializer):
         model = DailyWater
         fields = ['date', 'amount']
 
+
 class FoodLogSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(), source='product', write_only=True
     )
 
+    date = serializers.DateField(required=False)
+
     class Meta:
         model = FoodLog
-        fields =['id', 'product', 'product_id', 'weight', 'meal_type', 'created_at']
+        fields = ['id', 'product', 'product_id', 'weight', 'meal_type', 'date', 'created_at']

@@ -69,20 +69,19 @@ class FoodLogView(generics.ListCreateAPIView):
 
     @extend_schema(
         summary="Дневник питания (с фильтром по дате)",
-        description="Если не передать date, вернет еду за СЕГОДНЯ (имитация сброса в 00:00).",
-        parameters=[
-            OpenApiParameter(name='date', description='Дата в формате YYYY-MM-DD', required=False, type=str)
-        ]
+        description="Если не передать date, вернет еду за СЕГОДНЯ. Можно добавлять еду в прошлое передав date при POST.",
+        parameters = [
+        OpenApiParameter(name='date', description='Дата в формате YYYY-MM-DD', required=False, type=str)
+    ]
     )
     def get_queryset(self):
         user = self.request.user
         date_str = self.request.query_params.get('date')
-
         if date_str:
-            return FoodLog.objects.filter(user=user, created_at__date=date_str).order_by('-created_at')
+            return FoodLog.objects.filter(user=user, date=date_str).order_by('-created_at')
 
-        today = timezone.localtime().date()
-        return FoodLog.objects.filter(user=user, created_at__date=today).order_by('-created_at')
+        today = timezone.localdate()
+        return FoodLog.objects.filter(user=user, date=today).order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

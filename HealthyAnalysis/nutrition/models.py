@@ -26,8 +26,6 @@ class Product(models.Model):
         return f"{self.name} ({self.barcode or 'Блюдо'})"
 
 
-
-
 class FoodLog(models.Model):
     MEAL_CHOICES = (
         ('breakfast', 'Завтрак'),
@@ -41,10 +39,12 @@ class FoodLog(models.Model):
     weight = models.PositiveIntegerField("Вес съеденного (грамм)", default=100)
     meal_type = models.CharField("Прием пищи", max_length=20, choices=MEAL_CHOICES)
 
-    created_at = models.DateTimeField("Дата и время добавления", auto_now_add=True)
+    date = models.DateField("Дата употребления", default=timezone.localdate)
+
+    created_at = models.DateTimeField("Дата и время добавления (в БД)", auto_now_add=True)
 
     def __str__(self):
-        return f"{self.user.email} съел {self.product.name} ({self.weight}г)"
+        return f"{self.user.email} съел {self.product.name} ({self.date})"
 
 class DailyWater(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='water_logs')
