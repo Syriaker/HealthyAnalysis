@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,6 +81,8 @@ private fun HomeContent(
     onPreviousWaterWeek: () -> Unit,
     onNextWaterWeek: () -> Unit
 ) {
+    var customWaterAmount by remember { mutableStateOf("") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -224,6 +228,40 @@ private fun HomeContent(
                         Text("+250 мл", fontSize = 13.sp, color = Color.White)
                     }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                val customAmt = customWaterAmount.toIntOrNull() ?: 0
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = customWaterAmount,
+                        onValueChange = { customWaterAmount = it.filter { c -> c.isDigit() } },
+                        placeholder = { Text("Свой объём, мл", color = TextHint, fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedButton(
+                        onClick = { if (customAmt > 0) { onAddWater(-customAmt); customWaterAmount = "" } },
+                        enabled = customAmt > 0,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        Text("−", fontSize = 18.sp)
+                    }
+                    Button(
+                        onClick = { if (customAmt > 0) { onAddWater(customAmt); customWaterAmount = "" } },
+                        enabled = customAmt > 0,
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = Color.White),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        Text("+", fontSize = 18.sp, color = Color.White)
+                    }
+                }
             }
         }
 
@@ -287,6 +325,8 @@ private fun WaterHistoryDialog(
     val monday = selected.with(DayOfWeek.MONDAY)
     val todayMonday = today.with(DayOfWeek.MONDAY)
     val canGoNext = monday.isBefore(todayMonday)
+
+    var dialogCustomAmount by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss) {
         Box(
@@ -407,6 +447,40 @@ private fun WaterHistoryDialog(
                         colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = Color.White)
                     ) {
                         Text("+250 мл", color = Color.White)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                val dialogAmt = dialogCustomAmount.toIntOrNull() ?: 0
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = dialogCustomAmount,
+                        onValueChange = { dialogCustomAmount = it.filter { c -> c.isDigit() } },
+                        placeholder = { Text("Свой объём, мл", color = TextHint, fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedButton(
+                        onClick = { if (dialogAmt > 0) { onAddWater(-dialogAmt); dialogCustomAmount = "" } },
+                        enabled = dialogAmt > 0,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        Text("−", fontSize = 18.sp)
+                    }
+                    Button(
+                        onClick = { if (dialogAmt > 0) { onAddWater(dialogAmt); dialogCustomAmount = "" } },
+                        enabled = dialogAmt > 0,
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary, contentColor = Color.White),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        Text("+", fontSize = 18.sp, color = Color.White)
                     }
                 }
             }

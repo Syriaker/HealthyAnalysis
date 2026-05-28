@@ -108,9 +108,18 @@ class AnalysisViewModel @Inject constructor(
         }
     }
 
+    private fun computeStatus(value: Double, minNorm: Double?, maxNorm: Double?): String {
+        if (minNorm == null || maxNorm == null) return "unknown"
+        return when {
+            value < minNorm -> "low"
+            value > maxNorm -> "high"
+            else -> "norm"
+        }
+    }
+
     private fun rebuildState(latest: List<LatestAnalysisResponse>) {
         val normsById = norms.associateBy { it.id }
-        val historyByBiomarker: Map<Int, List<HistoryPoint>> = buildHistoryMap()
+        val historyByBiomarker: Map<Int, List<HistoryPoint>> = buildHistoryMap(normsById)
 
         val items = latest.map { l ->
             val norm = normsById[l.biomarkerId]
@@ -119,7 +128,7 @@ class AnalysisViewModel @Inject constructor(
                 name = l.biomarkerName,
                 value = l.value,
                 unit = l.unit,
-                status = l.status,
+                status = computeStatus(l.value, norm?.minValue, norm?.maxValue),
                 minNorm = norm?.minValue,
                 maxNorm = norm?.maxValue,
                 history = historyByBiomarker[l.biomarkerId].orEmpty()
@@ -145,16 +154,17 @@ class AnalysisViewModel @Inject constructor(
         )
     }
 
-    private fun buildHistoryMap(): Map<Int, List<HistoryPoint>> {
+    private fun buildHistoryMap(normsById: Map<Int, PersonalNormResponse>): Map<Int, List<HistoryPoint>> {
         val raw = mutableMapOf<Int, MutableList<HistoryPoint>>()
         records.forEach { rec ->
             val date = parseDate(rec.date) ?: return@forEach
             rec.results.forEach { res ->
                 val list = raw.getOrPut(res.biomarker) { mutableListOf() }
+                val norm = normsById[res.biomarker]
                 list += HistoryPoint(
                     date = date,
                     value = res.value,
-                    status = res.status ?: "unknown"
+                    status = computeStatus(res.value, norm?.minValue, norm?.maxValue)
                 )
             }
         }

@@ -24,7 +24,8 @@ data class FoodLogResponse(
 data class FoodLogRequest(
     @SerializedName("product_id") val productId: Int,
     val weight: Int,
-    @SerializedName("meal_type") val mealType: String
+    @SerializedName("meal_type") val mealType: String,
+    val date: String? = null
 )
 
 data class CustomProductRequest(
