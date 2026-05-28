@@ -256,7 +256,7 @@ private fun ProfileContent(
         }
 
         Text(
-            "v 1.1.0",
+            "v 1.2.0",
             fontSize = 12.sp,
             color = TextHint,
             modifier = Modifier

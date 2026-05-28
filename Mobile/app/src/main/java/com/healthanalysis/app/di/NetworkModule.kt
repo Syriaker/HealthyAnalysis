@@ -1,5 +1,6 @@
 package com.healthanalysis.app.di
 
+import com.healthanalysis.app.data.api.AiApi
 import com.healthanalysis.app.data.api.AnalysesApi
 import com.healthanalysis.app.data.api.AuthApi
 import com.healthanalysis.app.data.api.AuthInterceptor
@@ -75,5 +76,11 @@ object NetworkModule {
     @Singleton
     fun provideAnalysesApi(retrofit: Retrofit): AnalysesApi {
         return retrofit.create(AnalysesApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAiApi(retrofit: Retrofit): AiApi {
+        return retrofit.create(AiApi::class.java)
     }
 }
