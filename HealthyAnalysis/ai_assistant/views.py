@@ -1,22 +1,55 @@
 import requests
+import threading
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import permissions
+from rest_framework import permissions, generics
 from drf_spectacular.utils import extend_schema
+
 from profiles.models import UserProfile
 from analyses.models import AnalysisResult
 from nutrition.models import FoodLog, DailyWater
+from .models import AIAdviceLog
+from .serializers import AIAdviceLogSerializer
+
+class OllamaThread(threading.Thread):
+    def __init__(self, log_id, prompt):
+        self.log_id = log_id
+        self.prompt = prompt
+        threading.Thread.__init__(self)
+
+    def run(self):
+        try:
+            response = requests.post(
+                'http://localhost:11434/api/generate',
+                json={
+                    "model": "qwen2.5",  # Или "mistral"
+                    "prompt": self.prompt,
+                    "stream": False
+                },
+                timeout=300
+            )
+
+            log = AIAdviceLog.objects.get(id=self.log_id)
+            if response.status_code == 200:
+                log.advice_text = response.json().get('response', '')
+                log.status = 'ready'
+            else:
+                log.status = 'error'
+            log.save()
+
+        except Exception as e:
+            print(f"Ошибка фоновой генерации ИИ: {e}")
+            log = AIAdviceLog.objects.get(id=self.log_id)
+            log.status = 'error'
+            log.save()
 
 
 class AIGlobalAdviceView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    @extend_schema(
-        summary="Получить глобальный AI-анализ здоровья",
-        description="Собирает профиль, воду, питание за 3 дня и последние анализы. Отправляет в локальную LLM."
-    )
+    @extend_schema(summary="ЗАПРОСИТЬ генерацию AI-совета (Асинхронно)")
     def get(self, request):
         user = request.user
 
@@ -76,31 +109,46 @@ class AIGlobalAdviceView(APIView):
         {analyses_text}
 
         ЗАДАЧА:
-        Напиши структурированный ответ на русском языке. Используй форматирование Markdown.
+        Напиши подробный и структурированный ответ на русском языке. Не используй форматирование Markdown.
         Обязательно включи следующие разделы:
-        1. Оценка текущего состояния (ИМТ, питание, вода).
-        2. Разбор анализов (если есть отклонения, объясни, что они значат).
-        3. Конкретные рекомендации по питанию (какие продукты добавить, какие убрать).
-        4. Рекомендации по образу жизни.
+        1. Оценка текущего состояния (прокомментируй ИМТ, хватает ли воды и калорий).
+        2. Разбор анализов (какие есть отклонения, что они значат на понятном языке).
+        3. Конкретные рекомендации по питанию (какие продукты добавить, чтобы исправить дефициты, от чего отказаться).
+        4. Рекомендации по образу жизни и активности.
 
-        Не используй общие фразы. Опирайся только на предоставленные цифры.
+        Опирайся строго на предоставленные цифры.
         """
+
+        log = AIAdviceLog.objects.create(user=user, status='processing')
+        OllamaThread(log.id, prompt).start()
+
+        return Response({
+            "message": "Генерация запущена",
+            "task_id": log.id,
+            "status": "processing"
+        }, status=202)
+
+
+class AICheckStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(summary="Проверить статус готовности совета")
+    def get(self, request, task_id):
         try:
-            response = requests.post(
-                'http://localhost:11434/api/generate',
-                json={
-                    "model": "qwen2.5",
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=60  
-            )
+            log = AIAdviceLog.objects.get(id=task_id, user=request.user)
+            return Response({
+                "task_id": log.id,
+                "status": log.status,
+                "advice_text": log.advice_text
+            })
+        except AIAdviceLog.DoesNotExist:
+            return Response({"error": "Задача не найдена"}, status=404)
 
-            if response.status_code == 200:
-                ai_answer = response.json().get('response', '')
-                return Response({"advice": ai_answer})
-            else:
-                return Response({"error": "LLM вернула ошибку"}, status=502)
 
-        except requests.exceptions.RequestException:
-            return Response({"error": "Отказ AI. Убедись, что Ollama запущена на сервере!"}, status=503)
+class AIAdviceHistoryView(generics.ListAPIView):
+    serializer_class = AIAdviceLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(summary="Посмотреть историю советов от ИИ")
+    def get_queryset(self):
+        return AIAdviceLog.objects.filter(user=self.request.user, status='ready').order_by('-created_at')
