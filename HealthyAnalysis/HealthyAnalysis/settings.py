@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'analyses',
     'nutrition',
     'users',
+    'ai_assistant',
     'profiles'
 ]
 
