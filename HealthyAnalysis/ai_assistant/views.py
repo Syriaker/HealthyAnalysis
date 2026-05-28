@@ -13,6 +13,7 @@ from nutrition.models import FoodLog, DailyWater
 from .models import AIAdviceLog
 from .serializers import AIAdviceLogSerializer
 
+
 class OllamaThread(threading.Thread):
     def __init__(self, log_id, prompt):
         self.log_id = log_id
@@ -21,19 +22,34 @@ class OllamaThread(threading.Thread):
 
     def run(self):
         try:
+            system_prompt = (
+                "Ты русскоязычный врач-диетолог. "
+                "ОТВЕЧАЙ СТРОГО НА РУССКОМ ЯЗЫКЕ. Запрещено использовать китайские иероглифы или английский язык. "
+                "ЗАПРЕЩЕНО использовать форматирование Markdown. Никаких звездочек (**), решеток (###) или подчеркиваний. "
+                "Используй только обычный простой текст, переносы строк и стандартную нумерацию."
+            )
+
             response = requests.post(
                 'http://localhost:11434/api/generate',
                 json={
-                    "model": "qwen2.5",  # Или "mistral"
+                    "model": "qwen2.5",
+                    "system": system_prompt,
                     "prompt": self.prompt,
-                    "stream": False
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.3,
+                        "top_p": 0.8
+                    }
                 },
                 timeout=300
             )
 
             log = AIAdviceLog.objects.get(id=self.log_id)
             if response.status_code == 200:
-                log.advice_text = response.json().get('response', '')
+                clean_text = response.json().get('response', '')
+                clean_text = clean_text.replace('**', '').replace('###', '').replace('##', '')
+
+                log.advice_text = clean_text
                 log.status = 'ready'
             else:
                 log.status = 'error'
@@ -44,7 +60,6 @@ class OllamaThread(threading.Thread):
             log = AIAdviceLog.objects.get(id=self.log_id)
             log.status = 'error'
             log.save()
-
 
 class AIGlobalAdviceView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -94,30 +109,31 @@ class AIGlobalAdviceView(APIView):
         avg_c = round(total_c / 3)
 
         prompt = f"""
-        Ты профессиональный врач-диетолог и фитнес-тренер. Проанализируй данные пользователя и дай подробные рекомендации.
+                Проанализируй данные пользователя и дай подробные рекомендации.
 
-        ДАННЫЕ ПОЛЬЗОВАТЕЛЯ:
-        - Пол: {gender}, Возраст: {age} лет.
-        - Рост: {height} см, Вес: {weight} кг (ИМТ: {bmi}).
+                ДАННЫЕ ПОЛЬЗОВАТЕЛЯ:
+                - Пол: {gender}, Возраст: {age} лет.
+                - Рост: {height} см, Вес: {weight} кг (ИМТ: {bmi}).
 
-        ПИТАНИЕ И ВОДА (В среднем за последние 3 дня):
-        - Вода: {int(avg_water)} мл/день.
-        - Калории: {avg_kcal} ккал/день.
-        - Макронутриенты: Белки {avg_p}г, Жиры {avg_f}г, Углеводы {avg_c}г.
+                ПИТАНИЕ И ВОДА (В среднем за последние 3 дня):
+                - Вода: {int(avg_water)} мл/день.
+                - Калории: {avg_kcal} ккал/день.
+                - Макронутриенты: Белки {avg_p}г, Жиры {avg_f}г, Углеводы {avg_c}г.
 
-        ПОСЛЕДНИЕ АНАЛИЗЫ КРОВИ:
-        {analyses_text}
+                ПОСЛЕДНИЕ АНАЛИЗЫ КРОВИ:
+                {analyses_text}
 
-        ЗАДАЧА:
-        Напиши подробный и структурированный ответ на русском языке.
-        Обязательно включи следующие разделы:
-        1. Оценка текущего состояния (прокомментируй ИМТ, хватает ли воды и калорий).
-        2. Разбор анализов (какие есть отклонения, что они значат на понятном языке).
-        3. Конкретные рекомендации по питанию (какие продукты добавить, чтобы исправить дефициты, от чего отказаться).
-        4. Рекомендации по образу жизни и активности.
+                ЗАДАЧА:
+                Напиши подробный и структурированный ответ. 
+                Обязательно включи следующие разделы:
+                1. Оценка текущего состояния (ИМТ, вода, калории).
+                2. Разбор анализов (отклонения).
+                3. Рекомендации по питанию.
 
-        Опирайся строго на предоставленные цифры.
-        """
+                ОЧЕНЬ ВАЖНО: 
+                Отвечай строго на РУССКОМ языке. 
+                Не используй Markdown, жирный шрифт или заголовки с решетками. Только чистый текст.
+                """
 
         log = AIAdviceLog.objects.create(user=user, status='processing')
         OllamaThread(log.id, prompt).start()
